@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#151512" />
+    <meta
+      name="description"
+      content="OnTheWay — учёт брендовой одежды, продаж и финансов"
+    />
+    <title>OnTheWay — учёт вещей</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#dashboard" aria-label="OnTheWay">
+          <span class="brand-mark">OTW</span>
+          <span class="brand-copy">OnTheWay<small>inventory studio</small></span>
+        </a>
+
+        <nav class="nav" aria-label="Основная навигация">
+          <button class="nav-item active" data-view="dashboard">
+            <span>Обзор</span><span class="nav-index">01</span>
+          </button>
+          <button class="nav-item" data-view="inventory">
+            <span>Вещи</span><span class="nav-index">02</span>
+          </button>
+          <button class="nav-item" data-view="sales">
+            <span>Продажи</span><span class="nav-index">03</span>
+          </button>
+          <button class="nav-item" data-view="expenses">
+            <span>Расходы</span><span class="nav-index">04</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="sync-indicator"><i></i><span>Локальный режим</span></div>
+          <p>Демо-данные хранятся только в этом браузере.</p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobile-menu" aria-label="Открыть меню">☰</button>
+          <div>
+            <p class="eyebrow" id="page-eyebrow">17 сентября 2026</p>
+            <h1 id="page-title">Финансовый обзор</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="button button-ghost" id="open-ai-sale">Продать через ИИ</button>
+            <button class="button button-primary" id="open-add-item">+ Новая вещь</button>
+          </div>
+        </header>
+
+        <section class="view active" id="view-dashboard">
+          <div class="hero-grid">
+            <article class="hero-card">
+              <div>
+                <p class="eyebrow">Этот месяц</p>
+                <h2 id="hero-profit">0 ₽</h2>
+                <p class="muted">прибыль после прямых затрат</p>
+              </div>
+              <div class="hero-stats">
+                <div><span>Выручка</span><strong id="hero-revenue">0 ₽</strong></div>
+                <div><span>Продаж</span><strong id="hero-sales-count">0</strong></div>
+                <div><span>Средний чек</span><strong id="hero-average">0 ₽</strong></div>
+              </div>
+            </article>
+
+            <article class="quick-sale-card">
+              <span class="pill">Быстрое действие</span>
+              <h3>Вещь продана?</h3>
+              <p>Напишите как обычно — система разберёт сообщение и подготовит продажу.</p>
+              <button class="text-button" id="hero-ai-sale">Открыть умный ввод →</button>
+            </article>
+          </div>
+
+          <div class="metric-grid" id="metric-grid"></div>
+
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">Динамика</p><h3>Продажи за 6 месяцев</h3></div>
+                <span class="pill pill-neutral">₽</span>
+              </div>
+              <div class="chart" id="revenue-chart" aria-label="График выручки"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">Контроль</p><h3>Давно в продаже</h3></div>
+                <button class="text-button" data-go="inventory">Все вещи →</button>
+              </div>
+              <div class="aging-list" id="aging-list"></div>
+            </article>
+          </div>
+
+          <article class="panel recent-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Последние операции</p><h3>Недавние продажи</h3></div>
+              <button class="text-button" data-go="sales">Открыть журнал →</button>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>Вещь</th><th>Дата</th><th>Канал</th><th>Продажа</th><th>Прибыль</th></tr></thead><tbody id="recent-sales"></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-inventory">
+          <div class="toolbar">
+            <label class="search"><span>⌕</span><input id="inventory-search" type="search" placeholder="Артикул, бренд или название" /></label>
+            <select id="inventory-status" aria-label="Фильтр по статусу">
+              <option value="all">Все статусы</option>
+              <option value="available">В продаже</option>
+              <option value="reserved">Бронь</option>
+              <option value="sold">Продано</option>
+              <option value="draft">Подготовка</option>
+            </select>
+          </div>
+          <div class="inventory-summary" id="inventory-summary"></div>
+          <div class="product-grid" id="product-grid"></div>
+          <div class="empty-state hidden" id="inventory-empty"><h3>Ничего не найдено</h3><p>Измените поиск или добавьте новую вещь.</p></div>
+        </section>
+
+        <section class="view" id="view-sales">
+          <div class="section-intro"><p>История фиксирует исходные суммы каждой сделки — последующее изменение карточки вещи не меняет финансовые результаты.</p><button class="button button-primary" id="open-manual-sale">+ Зафиксировать продажу</button></div>
+          <article class="panel">
+            <div class="table-wrap"><table><thead><tr><th>Вещь</th><th>Дата</th><th>Площадка</th><th>Цена</th><th>Закупка</th><th>Расходы</th><th>Прибыль</th></tr></thead><tbody id="sales-table"></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-expenses">
+          <div class="section-intro"><p>Отдельные расходы помогают отличать прибыль с конкретной вещи от чистого результата бизнеса.</p><button class="button button-primary" id="open-add-expense">+ Добавить расход</button></div>
+          <div class="metric-grid" id="expense-metrics"></div>
+          <article class="panel">
+            <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Категория</th><th>Комментарий</th><th>Связь</th><th>Сумма</th></tr></thead><tbody id="expenses-table"></tbody></table></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="item-dialog">
+      <form method="dialog" id="item-form" class="dialog-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Новая карточка</p><h2>Добавить вещь</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="form-grid">
+          <label><span>Название *</span><input name="name" required placeholder="Nylon Metal Jacket" /></label>
+          <label><span>Бренд *</span><input name="brand" required placeholder="Stone Island" /></label>
+          <label><span>Категория</span><input name="category" placeholder="Куртки" /></label>
+          <label><span>Размер</span><input name="size" placeholder="L / 52" /></label>
+          <label><span>Стоимость закупки *</span><input name="purchasePrice" type="number" min="0" required placeholder="18000" /></label>
+          <label><span>Плановая цена *</span><input name="listPrice" type="number" min="0" required placeholder="42000" /></label>
+          <label class="span-2"><span>Замеры</span><input name="measurements" placeholder="Плечи 48, грудь 58, длина 71 см" /></label>
+          <label class="span-2"><span>Ссылка на фото</span><input name="image" type="url" placeholder="https://…" /></label>
+          <label class="span-2"><span>Ссылка на Авито</span><input name="avitoUrl" type="url" placeholder="https://www.avito.ru/…" /></label>
+          <label class="span-2"><span>Дополнительная информация</span><textarea name="notes" rows="3" placeholder="Состояние, комплект, нюансы"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить вещь</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="sale-dialog">
+      <form method="dialog" id="sale-form" class="dialog-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Новая операция</p><h2>Зафиксировать продажу</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="form-grid">
+          <label class="span-2"><span>Вещь *</span><select name="itemId" required id="sale-item-select"></select></label>
+          <label><span>Цена продажи *</span><input name="salePrice" type="number" min="0" required /></label>
+          <label><span>Площадка</span><select name="channel"><option>Авито</option><option>Instagram</option><option>Офлайн</option><option>Другое</option></select></label>
+          <label><span>Комиссия Авито</span><input name="commission" type="number" min="0" value="0" /></label>
+          <label><span>Продвижение</span><input name="promotion" type="number" min="0" value="0" /></label>
+          <label><span>Доставка и упаковка</span><input name="shipping" type="number" min="0" value="0" /></label>
+          <label><span>Прочие затраты</span><input name="otherCost" type="number" min="0" value="0" /></label>
+          <label><span>Дата продажи</span><input name="soldAt" type="date" /></label>
+          <label><span>Номер заказа Авито</span><input name="avitoOrderId" placeholder="необязательно" /></label>
+        </div>
+        <div class="calculation-preview" id="sale-preview"></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Подтвердить продажу</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="ai-dialog">
+      <form method="dialog" id="ai-form" class="dialog-form ai-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Умный ввод</p><h2>Расскажите о продаже</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="ai-example">Например: «Продал OTW-0003 за 42 000 на Авито, комиссия 2 100, продвижение 600»</div>
+        <label><span>Сообщение</span><textarea name="message" rows="5" required placeholder="Продал…"></textarea></label>
+        <div id="ai-result" class="ai-result hidden"></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Разобрать сообщение</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="expense-dialog">
+      <form method="dialog" id="expense-form" class="dialog-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Финансы</p><h2>Добавить расход</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="form-grid">
+          <label><span>Категория</span><select name="category"><option>Продвижение Авито</option><option>Упаковка</option><option>Доставка</option><option>Аренда</option><option>Зарплата</option><option>Налоги</option><option>Сервисы</option><option>Прочее</option></select></label>
+          <label><span>Сумма *</span><input name="amount" type="number" min="0" required /></label>
+          <label><span>Дата</span><input name="date" type="date" /></label>
+          <label><span>Связь с вещью</span><select name="itemId" id="expense-item-select"><option value="">Общий расход</option></select></label>
+          <label class="span-2"><span>Комментарий</span><textarea name="note" rows="3"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить расход</button></div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
