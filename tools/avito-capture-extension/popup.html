@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OnTheWay Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">OnTheWay</p>
+      <h1>Импорт из Авито</h1>
+      <p class="note">Помощник читает только карточки, уже показанные на странице профиля. Объявления не открываются.</p>
+      <div class="counter"><strong id="count">0</strong><span>карточек собрано</span></div>
+      <p class="status" id="status">Сбор выключен</p>
+      <div class="actions">
+        <button id="start" class="primary">Начать сбор</button>
+        <button id="scan">Собрать видимые</button>
+        <button id="stop">Остановить</button>
+        <button id="export" class="accent">Скачать JSON</button>
+        <button id="clear" class="danger">Очистить список</button>
+      </div>
+      <p class="hint">После запуска закройте это окно и самостоятельно прокручивайте каталог. Затем снова нажмите значок расширения и скачайте JSON.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

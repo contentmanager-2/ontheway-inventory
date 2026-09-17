@@ -402,6 +402,84 @@ function addExpense(form) {
   showToast("Расход сохранён");
 }
 
+const knownBrands = [
+  "Fear Of God Essentials",
+  "Fear Of God",
+  "Maison Margiela",
+  "Stone Island",
+  "CP Company",
+  "Rick Owens",
+  "Arc'teryx",
+  "Burberry",
+  "Moncler",
+  "Prada",
+  "MM6",
+];
+
+function detectBrand(title = "") {
+  const match = knownBrands.find((brand) => title.toLowerCase().includes(brand.toLowerCase()));
+  return match || "Не определён";
+}
+
+function detectSizes(text = "") {
+  const matches = text.match(/\b(?:XXXL|XXL|XXS|XL|XS|S|M|L)\b(?:\s*[\/,]\s*\b(?:XXXL|XXL|XXS|XL|XS|S|M|L)\b)*/gi);
+  return matches ? [...new Set(matches.map((value) => value.toUpperCase()))].join(", ") : "";
+}
+
+async function importAvitoFile(file) {
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch {
+    showToast("Не удалось прочитать JSON-файл");
+    return;
+  }
+  const incoming = Array.isArray(payload) ? payload : payload.items;
+  if (!Array.isArray(incoming)) {
+    showToast("В файле нет списка объявлений");
+    return;
+  }
+  const existingAvitoIds = new Set(state.items.map((item) => String(item.avitoItemId || "")).filter(Boolean));
+  let maxSku = state.items.reduce((max, item) => Math.max(max, Number(item.sku.replace(/\D/g, "")) || 0), 0);
+  let imported = 0;
+  let skipped = 0;
+  for (const source of incoming) {
+    const avitoItemId = String(source.avito_item_id || source.avitoItemId || "");
+    if (!avitoItemId || existingAvitoIds.has(avitoItemId)) {
+      skipped += 1;
+      continue;
+    }
+    maxSku += 1;
+    const title = String(source.title || "Без названия").trim();
+    const description = String(source.description || "").trim();
+    state.items.push({
+      id: uid("item"),
+      sku: `OTW-${String(maxSku).padStart(4, "0")}`,
+      name: title,
+      brand: detectBrand(title),
+      category: "Импортировано из Авито",
+      size: detectSizes(`${title} ${description}`),
+      purchasePrice: 0,
+      listPrice: Number(source.price || 0),
+      status: "draft",
+      measurements: "",
+      image: String(source.image || ""),
+      avitoUrl: String(source.url || ""),
+      avitoItemId,
+      notes: description,
+      createdAt: isoDate(),
+    });
+    existingAvitoIds.add(avitoItemId);
+    imported += 1;
+  }
+  saveState();
+  renderAll();
+  changeView("inventory");
+  document.querySelector("#inventory-status").value = "draft";
+  renderInventory();
+  showToast(`Импортировано: ${imported}${skipped ? ` · пропущено: ${skipped}` : ""}`);
+}
+
 function amountAfterKeyword(message, words) {
   const wordPattern = words.join("|");
   const match = message.match(new RegExp(`(?:${wordPattern})[^\\d]{0,12}([\\d\\s]+)`, "i"));
@@ -473,6 +551,12 @@ document.querySelector("#open-ai-sale").addEventListener("click", openAiDialog);
 document.querySelector("#hero-ai-sale").addEventListener("click", openAiDialog);
 document.querySelector("#inventory-search").addEventListener("input", renderInventory);
 document.querySelector("#inventory-status").addEventListener("change", renderInventory);
+document.querySelector("#open-avito-import").addEventListener("click", () => document.querySelector("#avito-import-file").click());
+document.querySelector("#avito-import-file").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  if (file) await importAvitoFile(file);
+  event.target.value = "";
+});
 document.querySelector("#product-grid").addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell]");
   if (button) openSaleDialog(button.dataset.sell);

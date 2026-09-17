@@ -1,0 +1,17 @@
+:root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { width: 320px; margin: 0; background: #f4f2eb; color: #171713; }
+main { padding: 20px; }
+.eyebrow { margin: 0 0 6px; color: #6f6e67; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+h1 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
+.note, .hint { color: #68675f; font-size: 12px; line-height: 1.5; }
+.counter { margin: 18px 0 6px; padding: 16px; border-radius: 14px; background: #171713; color: white; }
+.counter strong { display: block; color: #d9ff4f; font-size: 34px; line-height: 1; }
+.counter span { display: block; margin-top: 5px; color: #aaa99f; font-size: 11px; }
+.status { margin: 8px 0 14px; font-size: 11px; font-weight: 700; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+button { min-height: 38px; border: 1px solid #d9d6cc; border-radius: 999px; background: white; color: #171713; cursor: pointer; font: inherit; font-size: 11px; font-weight: 750; }
+button:hover { filter: brightness(.96); }
+.primary { background: #171713; border-color: #171713; color: white; }
+.accent { background: #d9ff4f; border-color: #bfdc46; }
+.danger { color: #a7382d; }
+.hint { margin-bottom: 0; font-size: 10px; }
