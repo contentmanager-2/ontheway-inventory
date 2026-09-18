@@ -2,7 +2,7 @@
 
 create extension if not exists pgcrypto;
 
-create type item_status as enum ('draft', 'available', 'reserved', 'sold', 'returned');
+create type item_status as enum ('draft', 'available', 'reserved', 'sold', 'returned', 'archived');
 
 create table public.items (
   id uuid primary key default gen_random_uuid(),
@@ -14,11 +14,14 @@ create table public.items (
   product_type text,
   color text,
   size text,
+  quantity integer not null default 0 check (quantity >= 0),
   measurements text,
   notes text,
   purchase_price numeric(12,2) not null check (purchase_price >= 0),
   list_price numeric(12,2) not null check (list_price >= 0),
   status item_status not null default 'draft',
+  archive_reason text,
+  archived_at timestamptz,
   main_image_path text,
   avito_item_id bigint unique,
   avito_url text,

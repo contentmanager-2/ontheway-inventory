@@ -112,8 +112,8 @@
               <option value="all">Все статусы</option>
               <option value="available">В продаже</option>
               <option value="reserved">Бронь</option>
-              <option value="sold">Продано</option>
               <option value="draft">Подготовка</option>
+              <option value="archived">Архив</option>
             </select>
             <button class="button button-ghost" id="open-avito-import">Импорт из Авито</button>
             <input class="hidden" id="avito-import-file" type="file" accept="application/json,.json" />
@@ -142,12 +142,14 @@
 
     <dialog id="item-dialog">
       <form method="dialog" id="item-form" class="dialog-form">
-        <div class="dialog-heading"><div><p class="eyebrow">Новая карточка</p><h2>Добавить вещь</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">Новая карточка</p><h2>Добавить вещь</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
         <div class="form-grid">
           <label><span>Название *</span><input name="name" required placeholder="Nylon Metal Jacket" /></label>
           <label><span>Бренд *</span><input name="brand" required placeholder="Stone Island" /></label>
           <label><span>Категория</span><input name="category" placeholder="Куртки" /></label>
           <label><span>Размер</span><input name="size" placeholder="L / 52" /></label>
+          <label><span>Цвет</span><input name="color" placeholder="Чёрный" /></label>
+          <label><span>Количество *</span><input name="quantity" type="number" min="0" required value="1" /></label>
           <label><span>Стоимость закупки *</span><input name="purchasePrice" type="number" min="0" required placeholder="18000" /></label>
           <label><span>Плановая цена *</span><input name="listPrice" type="number" min="0" required placeholder="42000" /></label>
           <label class="span-2"><span>Замеры</span><input name="measurements" placeholder="Плечи 48, грудь 58, длина 71 см" /></label>
@@ -155,13 +157,47 @@
           <label class="span-2"><span>Ссылка на Авито</span><input name="avitoUrl" type="url" placeholder="https://www.avito.ru/…" /></label>
           <label class="span-2"><span>Дополнительная информация</span><textarea name="notes" rows="3" placeholder="Состояние, комплект, нюансы"></textarea></label>
         </div>
-        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить вещь</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить вещь</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="edit-item-dialog">
+      <form method="dialog" id="edit-item-form" class="dialog-form">
+        <input name="id" type="hidden" />
+        <div class="dialog-heading"><div><p class="eyebrow">Карточка товара</p><h2 id="edit-item-title">Редактировать вещь</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <div class="form-grid">
+          <label><span>Название *</span><input name="name" required /></label>
+          <label><span>Бренд *</span><input name="brand" required /></label>
+          <label><span>Категория</span><input name="category" /></label>
+          <label><span>Статус</span><select name="status"><option value="draft">Подготовка</option><option value="available">В продаже</option><option value="reserved">Бронь</option><option value="archived">Архив</option></select></label>
+          <label><span>Цвет</span><input name="color" /></label>
+          <label><span>Размер</span><input name="size" /></label>
+          <label><span>Количество</span><input name="quantity" type="number" min="0" /></label>
+          <label><span>Стоимость закупки</span><input name="purchasePrice" type="number" min="0" /></label>
+          <label><span>Цена продажи</span><input name="listPrice" type="number" min="0" /></label>
+          <label class="span-2"><span>Замеры</span><input name="measurements" /></label>
+          <label class="span-2"><span>Ссылка на фото</span><input name="image" type="url" /></label>
+          <label class="span-2"><span>Ссылка на Авито</span><input name="avitoUrl" type="url" /></label>
+          <label class="span-2"><span>Дополнительная информация</span><textarea name="notes" rows="4"></textarea></label>
+        </div>
+        <div class="dialog-actions dialog-actions-split">
+          <div><button class="button button-danger" type="button" id="delete-item">Удалить навсегда</button><button class="button button-ghost" type="button" id="archive-item">В архив</button></div>
+          <div><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить</button></div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="essentials-dialog" class="wide-dialog">
+      <form method="dialog" id="essentials-form" class="dialog-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Fear Of God Essentials</p><h2>Ассортимент и остатки</h2><p class="dialog-subtitle">Модель → цвет → размер. Укажите фактическое количество каждой вещи.</p></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <div class="essentials-matrix" id="essentials-matrix"></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить остатки</button></div>
       </form>
     </dialog>
 
     <dialog id="sale-dialog">
       <form method="dialog" id="sale-form" class="dialog-form">
-        <div class="dialog-heading"><div><p class="eyebrow">Новая операция</p><h2>Зафиксировать продажу</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">Новая операция</p><h2>Зафиксировать продажу</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
         <div class="form-grid">
           <label class="span-2"><span>Вещь *</span><select name="itemId" required id="sale-item-select"></select></label>
           <label><span>Цена продажи *</span><input name="salePrice" type="number" min="0" required /></label>
@@ -174,23 +210,23 @@
           <label><span>Номер заказа Авито</span><input name="avitoOrderId" placeholder="необязательно" /></label>
         </div>
         <div class="calculation-preview" id="sale-preview"></div>
-        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Подтвердить продажу</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Подтвердить продажу</button></div>
       </form>
     </dialog>
 
     <dialog id="ai-dialog">
       <form method="dialog" id="ai-form" class="dialog-form ai-form">
-        <div class="dialog-heading"><div><p class="eyebrow">Умный ввод</p><h2>Расскажите о продаже</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">Умный ввод</p><h2>Расскажите о продаже</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
         <div class="ai-example">Например: «Продал OTW-0003 за 42 000 на Авито, комиссия 2 100, продвижение 600»</div>
         <label><span>Сообщение</span><textarea name="message" rows="5" required placeholder="Продал…"></textarea></label>
         <div id="ai-result" class="ai-result hidden"></div>
-        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Разобрать сообщение</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Разобрать сообщение</button></div>
       </form>
     </dialog>
 
     <dialog id="expense-dialog">
       <form method="dialog" id="expense-form" class="dialog-form">
-        <div class="dialog-heading"><div><p class="eyebrow">Финансы</p><h2>Добавить расход</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">Финансы</p><h2>Добавить расход</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
         <div class="form-grid">
           <label><span>Категория</span><select name="category"><option>Продвижение Авито</option><option>Упаковка</option><option>Доставка</option><option>Аренда</option><option>Зарплата</option><option>Налоги</option><option>Сервисы</option><option>Прочее</option></select></label>
           <label><span>Сумма *</span><input name="amount" type="number" min="0" required /></label>
@@ -198,7 +234,7 @@
           <label><span>Связь с вещью</span><select name="itemId" id="expense-item-select"><option value="">Общий расход</option></select></label>
           <label class="span-2"><span>Комментарий</span><textarea name="note" rows="3"></textarea></label>
         </div>
-        <div class="dialog-actions"><button class="button button-ghost" value="cancel">Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить расход</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить расход</button></div>
       </form>
     </dialog>
 

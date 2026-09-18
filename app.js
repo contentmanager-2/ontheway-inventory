@@ -1,4 +1,6 @@
 import {
+  ESSENTIALS_COLORS,
+  ESSENTIALS_PRODUCTS,
   createEssentialsVariants,
   isEssentialsListing,
   normalizeAvitoListing,
@@ -23,8 +25,8 @@ const monthName = new Intl.DateTimeFormat("ru-RU", { month: "short" });
 const statusLabels = {
   available: "В продаже",
   reserved: "Бронь",
-  sold: "Продано",
   draft: "Подготовка",
+  archived: "Архив",
 };
 
 const viewMeta = {
@@ -122,6 +124,17 @@ function loadState() {
 }
 
 let state = loadState();
+state.items = state.items.map((item) => {
+  const status = item.status === "sold" ? "archived" : item.status;
+  const defaultQuantity = ["available", "reserved"].includes(status) ? 1 : 0;
+  return {
+    ...item,
+    status,
+    quantity: Math.max(0, Number(item.quantity ?? defaultQuantity)),
+    archiveReason: item.status === "sold" ? "sold" : item.archiveReason || "",
+  };
+});
+state.deletedCatalogKeys ||= [];
 let currentView = "dashboard";
 
 function saveState() {
@@ -134,6 +147,10 @@ function uid(prefix) {
 
 function getItem(itemId) {
   return state.items.find((item) => item.id === itemId);
+}
+
+function itemQuantity(item) {
+  return Math.max(0, Number(item?.quantity || 0));
 }
 
 function saleLabel(sale) {
@@ -185,9 +202,10 @@ function renderDashboard() {
   const contribution = monthlySales.reduce((sum, sale) => sum + sale.profit, 0);
   const operatingExpenses = monthlyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const net = contribution - operatingExpenses;
-  const available = state.items.filter((item) => item.status === "available");
-  const inventoryCost = available.reduce((sum, item) => sum + item.purchasePrice, 0);
-  const potentialRevenue = available.reduce((sum, item) => sum + item.listPrice, 0);
+  const available = state.items.filter((item) => item.status === "available" && itemQuantity(item) > 0);
+  const availableUnits = available.reduce((sum, item) => sum + itemQuantity(item), 0);
+  const inventoryCost = available.reduce((sum, item) => sum + item.purchasePrice * itemQuantity(item), 0);
+  const potentialRevenue = available.reduce((sum, item) => sum + item.listPrice * itemQuantity(item), 0);
 
   document.querySelector("#hero-profit").textContent = money.format(contribution);
   document.querySelector("#hero-revenue").textContent = money.format(revenue);
@@ -195,7 +213,7 @@ function renderDashboard() {
   document.querySelector("#hero-average").textContent = money.format(monthlySales.length ? revenue / monthlySales.length : 0);
   document.querySelector("#metric-grid").innerHTML = [
     metricCard("Чистый результат", money.format(net), `Общие расходы: ${money.format(operatingExpenses)}`),
-    metricCard("Товаров в продаже", available.length, `В закупке: ${money.format(inventoryCost)}`),
+    metricCard("Вещей в продаже", availableUnits, `В закупке: ${money.format(inventoryCost)}`),
     metricCard("Потенциальная выручка", money.format(potentialRevenue), "По текущим ценам"),
     metricCard("Маржинальность", `${revenue ? Math.round((contribution / revenue) * 100) : 0}%`, "После прямых затрат"),
   ].join("");
@@ -245,22 +263,55 @@ function renderRecentSales() {
 function renderInventory() {
   const query = document.querySelector("#inventory-search").value.trim().toLowerCase();
   const status = document.querySelector("#inventory-status").value;
-  const filtered = state.items.filter((item) => {
+  const matchesFilters = (item) => {
     const haystack = `${item.sku} ${item.brand} ${item.name} ${item.category} ${item.color || ""}`.toLowerCase();
     return haystack.includes(query) && (status === "all" || item.status === status);
+  };
+  const essentials = state.items.filter((item) => item.catalogKey?.startsWith("essentials:"));
+  const regular = state.items.filter((item) => !item.catalogKey?.startsWith("essentials:") && matchesFilters(item));
+  const familyMatchesQuery = !query || essentials.some((item) => `${item.brand} ${item.name} ${item.category} ${item.color}`.toLowerCase().includes(query));
+  const familyMatchesStatus = status === "all" || essentials.some((item) => item.status === status);
+  const counts = Object.keys(statusLabels).map((key) => {
+    const entries = state.items.filter((item) => item.status === key);
+    const units = entries.reduce((sum, item) => sum + itemQuantity(item), 0);
+    return `<span class="summary-chip">${statusLabels[key]}: <strong>${units}</strong> шт. · ${entries.length} поз.</span>`;
   });
-  const counts = Object.keys(statusLabels).map((key) => `<span class="summary-chip">${statusLabels[key]}: <strong>${state.items.filter((item) => item.status === key).length}</strong></span>`);
   document.querySelector("#inventory-summary").innerHTML = counts.join("");
-  document.querySelector("#product-grid").innerHTML = filtered.map((item) => {
+
+  const familyHtml = essentials.length && familyMatchesQuery && familyMatchesStatus ? (() => {
+    const visibleVariants = status === "all" ? essentials : essentials.filter((item) => item.status === status);
+    const stock = visibleVariants.reduce((sum, item) => sum + itemQuantity(item), 0);
+    const activeVariants = visibleVariants.filter((item) => itemQuantity(item) > 0).length;
+    const sourceCount = new Set(essentials.flatMap((item) => item.sourceListingIds || [])).size;
+    const image = essentials.find((item) => item.image)?.image || "";
+    const visual = image
+      ? `<img src="${escapeHtml(image)}" alt="Fear Of God Essentials" loading="lazy" />`
+      : `<div class="placeholder">FOG</div>`;
+    const familyStatus = stock > 0 ? "В продаже" : essentials.every((item) => item.status === "archived") ? "Архив" : "Подготовка";
+    return `<article class="product-card family-card" data-essentials-card><div class="product-image">${visual}<span class="status-badge">${familyStatus}</span></div><div class="product-content"><span class="product-brand">Fear Of God Essentials</span><h3>Весь ассортимент Essentials</h3><p class="muted">Одна карточка для худи, штанов, футболок и шорт. Внутри — цвета, размеры, цены и точные остатки.</p><div class="family-stats"><div class="family-stat"><span>Остаток</span><strong>${stock} шт.</strong></div><div class="family-stat"><span>Вариантов в наличии</span><strong>${activeVariants} / ${essentials.length}</strong></div><div class="family-stat"><span>Источников Авито</span><strong>${sourceCount}</strong></div></div><button type="button" class="button button-primary family-open">Открыть ассортимент →</button></div></article>`;
+  })() : "";
+
+  const renderRegularCard = (item) => {
     const visual = item.image
       ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.brand)} ${escapeHtml(item.name)}" loading="lazy" />`
       : `<div class="placeholder">${escapeHtml(item.brand.slice(0, 2).toUpperCase())}</div>`;
     const sources = item.sourceListingIds?.length
       ? `<span class="source-count">${item.sourceListingIds.length} объявл. Авито</span>`
       : "";
-    return `<article class="product-card"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status]}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.size || "Без размера")}</span>${sources}<div class="product-price"><div><small>Цена</small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
-  }).join("");
-  document.querySelector("#inventory-empty").classList.toggle("hidden", filtered.length > 0);
+    return `<article class="product-card" data-edit-item="${item.id}"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status] || item.status}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.color || "Без цвета")} · ${escapeHtml(item.size || "Без размера")}</span>${sources}<div class="product-price"><div><small>Цена · <span class="stock-count">${itemQuantity(item)} шт.</span></small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" && itemQuantity(item) > 0 ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
+  };
+  const brandGroups = Map.groupBy
+    ? Map.groupBy(regular, (item) => item.brand || "Без бренда")
+    : regular.reduce((groups, item) => groups.set(item.brand || "Без бренда", [...(groups.get(item.brand || "Без бренда") || []), item]), new Map());
+  const regularHtml = [...brandGroups.entries()]
+    .sort(([brandA], [brandB]) => brandA.localeCompare(brandB, "ru"))
+    .map(([brand, items]) => `<details class="brand-folder" ${query ? "open" : ""}><summary><span>${escapeHtml(brand)}</span><small>${items.length} карточек · ${items.reduce((sum, item) => sum + itemQuantity(item), 0)} шт.</small></summary><div class="brand-product-grid">${items.map(renderRegularCard).join("")}</div></details>`)
+    .join("");
+  const essentialsFolder = familyHtml
+    ? `<details class="brand-folder essentials-folder" open><summary><span>Fear Of God Essentials</span><small>1 карточка · ${essentials.reduce((sum, item) => sum + itemQuantity(item), 0)} шт.</small></summary><div class="brand-product-grid">${familyHtml}</div></details>`
+    : "";
+  document.querySelector("#product-grid").innerHTML = essentialsFolder + regularHtml;
+  document.querySelector("#inventory-empty").classList.toggle("hidden", Boolean(familyHtml) || regular.length > 0);
 }
 
 function renderSales() {
@@ -290,8 +341,8 @@ function renderExpenses() {
 }
 
 function renderSelects() {
-  const available = state.items.filter((item) => item.status === "available");
-  const saleOptions = available.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)}</option>`).join("");
+  const available = state.items.filter((item) => item.status === "available" && itemQuantity(item) > 0);
+  const saleOptions = available.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)} · ${escapeHtml(item.size || "—")} · ${itemQuantity(item)} шт.</option>`).join("");
   document.querySelector("#sale-item-select").innerHTML = `<option value="">Выберите вещь</option>${saleOptions}`;
   document.querySelector("#expense-item-select").innerHTML = `<option value="">Общий расход</option>${state.items.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)}</option>`).join("")}`;
 }
@@ -307,7 +358,39 @@ function renderAll() {
 function openItemDialog() {
   const form = document.querySelector("#item-form");
   form.reset();
+  form.elements.quantity.value = 1;
   document.querySelector("#item-dialog").showModal();
+}
+
+function openEditItemDialog(itemId) {
+  const item = getItem(itemId);
+  if (!item) return;
+  const form = document.querySelector("#edit-item-form");
+  form.reset();
+  ["id", "name", "brand", "category", "status", "color", "size", "quantity", "purchasePrice", "listPrice", "measurements", "image", "avitoUrl", "notes"].forEach((field) => {
+    form.elements[field].value = item[field] ?? "";
+  });
+  document.querySelector("#edit-item-title").textContent = `${item.sku} · ${item.name}`;
+  document.querySelector("#edit-item-dialog").showModal();
+}
+
+function renderEssentialsMatrix() {
+  const variants = state.items.filter((item) => item.catalogKey?.startsWith("essentials:"));
+  document.querySelector("#essentials-matrix").innerHTML = ESSENTIALS_PRODUCTS.map((product) => {
+    const productVariants = variants.filter((item) => item.productType === product.key);
+    const stock = productVariants.reduce((sum, item) => sum + itemQuantity(item), 0);
+    const colors = ESSENTIALS_COLORS.map((color) => {
+      const colorVariants = productVariants.filter((item) => item.color === color.name);
+      const rows = colorVariants.map((item) => `<div class="variant-row" data-variant-row="${item.id}"><span class="variant-size">${escapeHtml(item.size)}</span><input type="number" min="0" name="quantity" value="${itemQuantity(item)}" aria-label="Количество ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="purchasePrice" value="${Number(item.purchasePrice || 0)}" aria-label="Закупка ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="listPrice" value="${Number(item.listPrice || 0)}" aria-label="Цена ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><select name="status" aria-label="Статус ${escapeHtml(item.name)} ${escapeHtml(item.size)}"><option value="draft" ${item.status === "draft" ? "selected" : ""}>Подготовка</option><option value="available" ${item.status === "available" ? "selected" : ""}>В продаже</option><option value="reserved" ${item.status === "reserved" ? "selected" : ""}>Бронь</option><option value="archived" ${item.status === "archived" ? "selected" : ""}>Архив</option></select><button class="variant-delete" type="button" data-delete-variant="${item.id}" title="Удалить вариант">×</button></div>`).join("");
+      return `<section class="color-group"><h4>${escapeHtml(color.name)}</h4><small>${escapeHtml(color.russian)}</small><div class="matrix-legend"><span>Размер</span><span>Штук</span><span>Закупка</span><span>Продажа</span><span>Статус</span></div>${rows || `<p class="muted">Вариантов нет</p>`}</section>`;
+    }).join("");
+    return `<section class="essentials-product"><div class="essentials-product-heading"><h3>${escapeHtml(product.name)}</h3><span>${stock} шт. в остатке · ${product.sizes.join(" / ")}</span></div><div class="color-groups">${colors}</div></section>`;
+  }).join("");
+}
+
+function openEssentialsDialog() {
+  renderEssentialsMatrix();
+  document.querySelector("#essentials-dialog").showModal();
 }
 
 function openSaleDialog(itemId = "", prefill = {}) {
@@ -339,6 +422,7 @@ function updateSalePreview() {
 
 function addItem(form) {
   const data = new FormData(form);
+  const quantity = Math.max(0, Number(data.get("quantity") || 0));
   const maxSku = state.items.reduce((max, item) => Math.max(max, Number(item.sku.replace(/\D/g, "")) || 0), 0);
   state.items.unshift({
     id: uid("item"),
@@ -347,9 +431,11 @@ function addItem(form) {
     brand: data.get("brand").trim(),
     category: data.get("category").trim() || "Без категории",
     size: data.get("size").trim(),
+    color: data.get("color").trim(),
+    quantity,
     purchasePrice: Number(data.get("purchasePrice")),
     listPrice: Number(data.get("listPrice")),
-    status: "available",
+    status: quantity > 0 ? "available" : "draft",
     measurements: data.get("measurements").trim(),
     image: data.get("image").trim(),
     avitoUrl: data.get("avitoUrl").trim(),
@@ -362,10 +448,100 @@ function addItem(form) {
   showToast("Вещь добавлена в каталог");
 }
 
+function saveEditedItem(form) {
+  const data = new FormData(form);
+  const item = getItem(data.get("id"));
+  if (!item) return;
+  const quantity = Math.max(0, Number(data.get("quantity") || 0));
+  item.name = data.get("name").trim();
+  item.brand = data.get("brand").trim();
+  item.category = data.get("category").trim() || "Без категории";
+  item.color = data.get("color").trim();
+  item.size = data.get("size").trim();
+  item.quantity = quantity;
+  item.purchasePrice = Number(data.get("purchasePrice") || 0);
+  item.listPrice = Number(data.get("listPrice") || 0);
+  item.measurements = data.get("measurements").trim();
+  item.image = data.get("image").trim();
+  item.avitoUrl = data.get("avitoUrl").trim();
+  item.notes = data.get("notes").trim();
+  item.status = data.get("status");
+  if (quantity === 0 && item.status === "available") item.status = "draft";
+  if (quantity > 0 && item.status === "draft") item.status = "available";
+  saveState();
+  renderAll();
+  document.querySelector("#edit-item-dialog").close();
+  showToast(`${item.sku} сохранена`);
+}
+
+function archiveEditedItem() {
+  const item = getItem(document.querySelector("#edit-item-form").elements.id.value);
+  if (!item) return;
+  item.status = "archived";
+  item.quantity = 0;
+  item.archiveReason = item.archiveReason || "manual";
+  item.archivedAt = isoDate();
+  saveState();
+  renderAll();
+  document.querySelector("#edit-item-dialog").close();
+  showToast(`${item.sku} добавлена в архив`);
+}
+
+function deleteEditedItem() {
+  const item = getItem(document.querySelector("#edit-item-form").elements.id.value);
+  if (!item) return;
+  if (state.sales.some((sale) => sale.itemId === item.id)) {
+    showToast("У вещи есть продажи — её можно только архивировать");
+    return;
+  }
+  if (!window.confirm(`Удалить ${item.sku} окончательно? Это действие нельзя отменить.`)) return;
+  if (item.catalogKey) state.deletedCatalogKeys.push(item.catalogKey);
+  state.items = state.items.filter((entry) => entry.id !== item.id);
+  state.expenses = state.expenses.map((expense) => expense.itemId === item.id ? { ...expense, itemId: "" } : expense);
+  saveState();
+  renderAll();
+  document.querySelector("#edit-item-dialog").close();
+  showToast(`${item.sku} удалена окончательно`);
+}
+
+function saveEssentialsMatrix() {
+  document.querySelectorAll("[data-variant-row]").forEach((row) => {
+    const item = getItem(row.dataset.variantRow);
+    if (!item) return;
+    item.quantity = Math.max(0, Number(row.querySelector('[name="quantity"]').value || 0));
+    item.purchasePrice = Number(row.querySelector('[name="purchasePrice"]').value || 0);
+    item.listPrice = Number(row.querySelector('[name="listPrice"]').value || 0);
+    item.status = row.querySelector('[name="status"]').value;
+    if (item.quantity === 0 && item.status === "available") item.status = "draft";
+    if (item.quantity > 0 && item.status === "draft") item.status = "available";
+    if (item.status === "archived") item.quantity = 0;
+  });
+  saveState();
+  renderAll();
+  document.querySelector("#essentials-dialog").close();
+  showToast("Остатки Essentials сохранены");
+}
+
+function deleteEssentialsVariant(itemId) {
+  const item = getItem(itemId);
+  if (!item) return;
+  if (state.sales.some((sale) => sale.itemId === item.id)) {
+    showToast("У варианта есть продажи — переведите его в архив");
+    return;
+  }
+  if (!window.confirm(`Удалить ${item.name}, размер ${item.size} окончательно?`)) return;
+  if (item.catalogKey) state.deletedCatalogKeys.push(item.catalogKey);
+  state.items = state.items.filter((entry) => entry.id !== item.id);
+  saveState();
+  renderEssentialsMatrix();
+  renderAll();
+  showToast("Вариант удалён");
+}
+
 function addSale(form) {
   const data = new FormData(form);
   const item = getItem(data.get("itemId"));
-  if (!item || item.status !== "available") {
+  if (!item || item.status !== "available" || itemQuantity(item) < 1) {
     showToast("Выберите доступную вещь");
     return;
   }
@@ -388,11 +564,16 @@ function addSale(form) {
     profit: salePrice - item.purchasePrice - commission - promotion - shipping - otherCost,
     avitoOrderId: data.get("avitoOrderId").trim(),
   });
-  item.status = "sold";
+  item.quantity = Math.max(0, itemQuantity(item) - 1);
+  if (item.quantity === 0) {
+    item.status = "archived";
+    item.archiveReason = "sold";
+    item.archivedAt = isoDate();
+  }
   saveState();
   renderAll();
   document.querySelector("#sale-dialog").close();
-  showToast(`${item.sku} отмечена как проданная`);
+  showToast(item.quantity > 0 ? `${item.sku}: осталось ${item.quantity} шт.` : `${item.sku} продана и перенесена в архив`);
 }
 
 function addExpense(form) {
@@ -411,23 +592,69 @@ function addExpense(form) {
   showToast("Расход сохранён");
 }
 
-const knownBrands = [
-  "Fear Of God Essentials",
-  "Fear Of God",
-  "Maison Margiela",
-  "Stone Island",
-  "CP Company",
-  "Rick Owens",
-  "Arc'teryx",
-  "Burberry",
-  "Moncler",
-  "Prada",
-  "MM6",
+const brandPatterns = [
+  ["Fear Of God Essentials", /(?:fear\s+of\s+god\s+essentials|essentials\s+fear\s+of\s+god)/i],
+  ["Fear Of God", /fear\s+of\s+god/i],
+  ["MM6 Maison Margiela", /\bMM6\b.*(?:Maison\s+Margiela)?/i],
+  ["Maison Margiela", /Maison\s+Margiela/i],
+  ["C.P. Company", /C\.?\s*P\.?\s*Company/i],
+  ["Stone Island", /Stone\s+Island/i],
+  ["Rick Owens", /Rick\s+Owens/i],
+  ["Arc'teryx", /Arc['’]?teryx/i],
+  ["Louis Vuitton", /Louis\s+Vuitton/i],
+  ["Loro Piana", /Loro\s+Piana/i],
+  ["Ermenegildo Zegna", /Er(?:m|n)enegildo\s+Zegna/i],
+  ["Comme des Garçons", /Comme\s+Des\s+Gar(?:c|s)ons/i],
+  ["Carhartt WIP", /Carhartt\s+Wip/i],
+  ["Polo Ralph Lauren", /Polo\s+Ralph\s+Lauren/i],
+  ["Cav Empt", /Cav\s+Empt/i],
+  ["New Balance", /New\s+Balance/i],
+  ["The North Face", /The\s+North\s+Face/i],
+  ["Golden Goose", /Golden\s+Goose/i],
+  ["Gosha Rubchinskiy", /Гоша\s+Рубчинск/i],
+  ["Yung Lean", /Yung\s+Lean/i],
+  ["Kanye West", /Kanye\s+West/i],
+  ["True Religion", /True\s+Religion/i],
+  ["Paul & Shark", /Paul\s+Shark/i],
+  ["GU Undercover", /GU\s+Undercover/i],
+  ["BAPE", /\bBape\b/i],
+  ["Balenciaga", /Balenciaga/i],
+  ["Burberry", /Burberry/i],
+  ["Moncler", /Moncler/i],
+  ["Prada", /Prada/i],
+  ["Goyard", /Goyard/i],
+  ["Gucci", /Gucci/i],
+  ["Canali", /Canali/i],
+  ["Dickies", /Dickies/i],
+  ["Vetements", /Vetem(?:en|em)ts/i],
+  ["Hermès", /Herm[eèé]s/i],
+  ["Supreme", /Supreme/i],
+  ["Nike", /\bNike\b/i],
+  ["Uniqlo", /\bUniqlo\b/i],
+  ["Jordan", /\bJordan\b/i],
+  ["Nemen", /Nemen/i],
+  ["Yeezy", /Yeezy/i],
+  ["H&M", /(?:\bH&M\b|Glenn\s+Martens)/i],
+  ["Richmond", /Richmond/i],
+  ["Oklou", /Oklou/i],
+  ["Богема Ленинград", /Богема\s+Ленинград/i],
 ];
 
 function detectBrand(title = "") {
-  const match = knownBrands.find((brand) => title.toLowerCase().includes(brand.toLowerCase()));
-  return match || "Не определён";
+  return brandPatterns.find(([, pattern]) => pattern.test(title))?.[0] || "Не определён";
+}
+
+function repairImportedBrands() {
+  let changed = false;
+  state.items.forEach((item) => {
+    if (item.catalogKey) return;
+    const detected = detectBrand(`${item.brand || ""} ${item.name}`);
+    if (detected !== "Не определён" && item.brand !== detected) {
+      item.brand = detected;
+      changed = true;
+    }
+  });
+  if (changed) saveState();
 }
 
 function detectSizes(text = "") {
@@ -504,6 +731,7 @@ async function importAvitoFile(file) {
       purchasePrice: 0,
       listPrice: listing.price,
       status: "draft",
+      quantity: 0,
       measurements: "",
       image: listing.image,
       avitoUrl: listing.url,
@@ -522,6 +750,7 @@ async function importAvitoFile(file) {
   );
   let variantsCreated = 0;
   for (const variant of normalizedVariants) {
+    if (state.deletedCatalogKeys.includes(variant.catalogKey)) continue;
     const existing = state.items.find((item) => item.catalogKey === variant.catalogKey);
     if (existing) {
       existing.sourceListingIds = variant.sourceListingIds;
@@ -622,7 +851,17 @@ document.querySelector("#avito-import-file").addEventListener("change", async (e
 });
 document.querySelector("#product-grid").addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell]");
-  if (button) openSaleDialog(button.dataset.sell);
+  if (button) {
+    event.stopPropagation();
+    openSaleDialog(button.dataset.sell);
+    return;
+  }
+  if (event.target.closest("[data-essentials-card]")) {
+    openEssentialsDialog();
+    return;
+  }
+  const card = event.target.closest("[data-edit-item]");
+  if (card) openEditItemDialog(card.dataset.editItem);
 });
 document.querySelector("#sale-form").addEventListener("input", updateSalePreview);
 document.querySelector("#sale-form").addEventListener("change", updateSalePreview);
@@ -631,6 +870,22 @@ document.querySelector("#item-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (event.submitter?.value === "cancel") return document.querySelector("#item-dialog").close();
   addItem(event.currentTarget);
+});
+document.querySelector("#edit-item-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (event.submitter?.value === "cancel") return document.querySelector("#edit-item-dialog").close();
+  saveEditedItem(event.currentTarget);
+});
+document.querySelector("#archive-item").addEventListener("click", archiveEditedItem);
+document.querySelector("#delete-item").addEventListener("click", deleteEditedItem);
+document.querySelector("#essentials-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (event.submitter?.value === "cancel") return document.querySelector("#essentials-dialog").close();
+  saveEssentialsMatrix();
+});
+document.querySelector("#essentials-matrix").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-variant]");
+  if (button) deleteEssentialsVariant(button.dataset.deleteVariant);
 });
 document.querySelector("#sale-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -649,5 +904,6 @@ document.querySelector("#ai-form").addEventListener("submit", (event) => {
 });
 
 const requestedView = window.location.hash.slice(1);
+repairImportedBrands();
 if (viewMeta[requestedView]) changeView(requestedView);
 renderAll();
