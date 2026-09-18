@@ -12,7 +12,24 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="auth-screen" id="auth-screen">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-mark">OTW</span><span>OnTheWay</span></div>
+        <p class="eyebrow">Закрытая система учёта</p>
+        <h1>Вход в магазин</h1>
+        <p class="auth-copy">Войдите с рабочего телефона или компьютера. Каталог и продажи будут общими для всей команды.</p>
+        <form id="auth-form" class="auth-form">
+          <label><span>Email</span><input name="email" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
+          <label><span>Пароль</span><input name="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Не менее 6 символов" /></label>
+          <p class="auth-error hidden" id="auth-error"></p>
+          <button class="button button-primary" type="submit">Войти</button>
+          <button class="button button-ghost" type="button" id="create-owner-account">Создать первый аккаунт</button>
+        </form>
+        <p class="auth-note">После создания аккаунта подтвердите email письмом от Supabase. Доступ остальных сотрудников добавляется отдельно.</p>
+      </div>
+    </section>
+
+    <div class="app-shell hidden" id="app-shell">
       <aside class="sidebar">
         <a class="brand" href="#dashboard" aria-label="OnTheWay">
           <span class="brand-mark">OTW</span>
@@ -35,8 +52,9 @@
         </nav>
 
         <div class="sidebar-footer">
-          <div class="sync-indicator"><i></i><span>Локальный режим</span></div>
-          <p>Демо-данные хранятся только в этом браузере.</p>
+          <div class="sync-indicator" id="sync-indicator"><i></i><span>Подключение…</span></div>
+          <p id="signed-in-user"></p>
+          <button class="sidebar-logout" id="sign-out" type="button">Выйти</button>
         </div>
       </aside>
 

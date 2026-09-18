@@ -5,8 +5,12 @@ import {
   isEssentialsListing,
   normalizeAvitoListing,
 } from "./avito-normalizer.js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./config.js";
 
 const STORAGE_KEY = "ontheway-mvp-v1";
+const WORKSPACE_ID = "ontheway";
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const money = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -123,22 +127,115 @@ function loadState() {
   }
 }
 
-let state = loadState();
-state.items = state.items.map((item) => {
-  const status = item.status === "sold" ? "archived" : item.status;
-  const defaultQuantity = ["available", "reserved"].includes(status) ? 1 : 0;
-  return {
-    ...item,
-    status,
-    quantity: Math.max(0, Number(item.quantity ?? defaultQuantity)),
-    archiveReason: item.status === "sold" ? "sold" : item.archiveReason || "",
-  };
-});
-state.deletedCatalogKeys ||= [];
+function normalizeState(nextState) {
+  const normalized = nextState && typeof nextState === "object" ? nextState : createSeed();
+  normalized.items = (normalized.items || []).map((item) => {
+    const status = item.status === "sold" ? "archived" : item.status;
+    const defaultQuantity = ["available", "reserved"].includes(status) ? 1 : 0;
+    return {
+      ...item,
+      status,
+      quantity: Math.max(0, Number(item.quantity ?? defaultQuantity)),
+      archiveReason: item.status === "sold" ? "sold" : item.archiveReason || "",
+    };
+  });
+  normalized.sales ||= [];
+  normalized.expenses ||= [];
+  normalized.deletedCatalogKeys ||= [];
+  return normalized;
+}
+
+let state = normalizeState(loadState());
 let currentView = "dashboard";
+let currentUser = null;
+let remoteReady = false;
+let saveTimer = null;
+let syncInFlight = false;
+let syncRequested = false;
+let realtimeChannel = null;
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!remoteReady || !currentUser) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(flushRemoteState, 250);
+}
+
+function setSyncStatus(label, isError = false) {
+  const indicator = document.querySelector("#sync-indicator");
+  if (!indicator) return;
+  indicator.querySelector("span").textContent = label;
+  indicator.classList.toggle("error", isError);
+}
+
+async function flushRemoteState() {
+  if (!remoteReady || !currentUser) return;
+  if (syncInFlight) {
+    syncRequested = true;
+    return;
+  }
+  syncInFlight = true;
+  do {
+    syncRequested = false;
+    setSyncStatus("Сохраняем…");
+    const snapshot = JSON.parse(JSON.stringify(state));
+    const { error } = await supabase.from("workspace_state").upsert({
+      id: WORKSPACE_ID,
+      state: snapshot,
+      updated_by: currentUser.id,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      console.error(error);
+      setSyncStatus("Ошибка синхронизации", true);
+      showToast("Не удалось сохранить в общую базу. Локальная копия сохранена.");
+      break;
+    }
+    setSyncStatus("Все изменения сохранены");
+  } while (syncRequested);
+  syncInFlight = false;
+}
+
+async function loadRemoteState() {
+  setSyncStatus("Загружаем общую базу…");
+  const { data, error } = await supabase
+    .from("workspace_state")
+    .select("state, updated_at")
+    .eq("id", WORKSPACE_ID)
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.state) {
+    state = normalizeState(data.state);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } else {
+    const { error: createError } = await supabase.from("workspace_state").insert({
+      id: WORKSPACE_ID,
+      state,
+      updated_by: currentUser.id,
+    });
+    if (createError) throw createError;
+  }
+  remoteReady = true;
+  setSyncStatus("Все изменения сохранены");
+}
+
+function subscribeToRemoteChanges() {
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  realtimeChannel = supabase
+    .channel("ontheway-workspace")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "workspace_state", filter: `id=eq.${WORKSPACE_ID}` },
+      (payload) => {
+        if (!payload.new?.state || payload.new.updated_by === currentUser?.id) return;
+        state = normalizeState(payload.new.state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        renderAll();
+        setSyncStatus("Получены изменения команды");
+        showToast("Каталог обновлён другим сотрудником");
+      },
+    )
+    .subscribe();
 }
 
 function uid(prefix) {
@@ -904,6 +1001,104 @@ document.querySelector("#ai-form").addEventListener("submit", (event) => {
 });
 
 const requestedView = window.location.hash.slice(1);
-repairImportedBrands();
-if (viewMeta[requestedView]) changeView(requestedView);
-renderAll();
+
+function showAuthMessage(message, success = false) {
+  const node = document.querySelector("#auth-error");
+  node.textContent = message;
+  node.classList.remove("hidden");
+  node.style.color = success ? "#477100" : "";
+  node.style.background = success ? "#eff7cf" : "";
+}
+
+function clearAuthMessage() {
+  const node = document.querySelector("#auth-error");
+  node.classList.add("hidden");
+  node.style.color = "";
+  node.style.background = "";
+}
+
+async function enterApp(session) {
+  if (!session?.user) return;
+  currentUser = session.user;
+  document.querySelector("#signed-in-user").textContent = currentUser.email || "Пользователь";
+  try {
+    await loadRemoteState();
+  } catch (error) {
+    console.error(error);
+    remoteReady = false;
+    setSyncStatus("База ещё не настроена", true);
+    showAuthMessage("Таблицы Supabase ещё не установлены. Завершите настройку базы и повторите вход.");
+    document.querySelector("#auth-screen").classList.remove("hidden");
+    document.querySelector("#app-shell").classList.add("hidden");
+    return;
+  }
+  repairImportedBrands();
+  subscribeToRemoteChanges();
+  document.querySelector("#auth-screen").classList.add("hidden");
+  document.querySelector("#app-shell").classList.remove("hidden");
+  if (viewMeta[requestedView]) changeView(requestedView);
+  renderAll();
+}
+
+function leaveApp() {
+  currentUser = null;
+  remoteReady = false;
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+  document.querySelector("#app-shell").classList.add("hidden");
+  document.querySelector("#auth-screen").classList.remove("hidden");
+}
+
+document.querySelector("#auth-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearAuthMessage();
+  const form = event.currentTarget;
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = "Входим…";
+  const { error } = await supabase.auth.signInWithPassword({
+    email: form.elements.email.value.trim(),
+    password: form.elements.password.value,
+  });
+  submit.disabled = false;
+  submit.textContent = "Войти";
+  if (error) showAuthMessage(error.message === "Invalid login credentials" ? "Неверный email или пароль." : error.message);
+});
+
+document.querySelector("#create-owner-account").addEventListener("click", async () => {
+  clearAuthMessage();
+  const form = document.querySelector("#auth-form");
+  if (!form.reportValidity()) return;
+  const button = document.querySelector("#create-owner-account");
+  button.disabled = true;
+  button.textContent = "Создаём…";
+  const { data, error } = await supabase.auth.signUp({
+    email: form.elements.email.value.trim(),
+    password: form.elements.password.value,
+  });
+  button.disabled = false;
+  button.textContent = "Создать первый аккаунт";
+  if (error) {
+    showAuthMessage(error.message);
+  } else if (!data.session) {
+    showAuthMessage("Аккаунт создан. Откройте письмо Supabase и подтвердите email, затем войдите.", true);
+  } else {
+    showAuthMessage("Аккаунт создан. Загружаем каталог…", true);
+  }
+});
+
+document.querySelector("#sign-out").addEventListener("click", () => supabase.auth.signOut());
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_OUT") leaveApp();
+  if (event === "SIGNED_IN" && session) window.setTimeout(() => enterApp(session), 0);
+});
+
+async function bootstrap() {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) await enterApp(data.session);
+}
+
+bootstrap();
