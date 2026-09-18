@@ -1067,28 +1067,6 @@ document.querySelector("#auth-form").addEventListener("submit", async (event) =>
   if (error) showAuthMessage(error.message === "Invalid login credentials" ? "Неверный email или пароль." : error.message);
 });
 
-document.querySelector("#create-owner-account").addEventListener("click", async () => {
-  clearAuthMessage();
-  const form = document.querySelector("#auth-form");
-  if (!form.reportValidity()) return;
-  const button = document.querySelector("#create-owner-account");
-  button.disabled = true;
-  button.textContent = "Создаём…";
-  const { data, error } = await supabase.auth.signUp({
-    email: form.elements.email.value.trim(),
-    password: form.elements.password.value,
-  });
-  button.disabled = false;
-  button.textContent = "Создать первый аккаунт";
-  if (error) {
-    showAuthMessage(error.message);
-  } else if (!data.session) {
-    showAuthMessage("Аккаунт создан. Откройте письмо Supabase и подтвердите email, затем войдите.", true);
-  } else {
-    showAuthMessage("Аккаунт создан. Загружаем каталог…", true);
-  }
-});
-
 document.querySelector("#sign-out").addEventListener("click", () => supabase.auth.signOut());
 
 supabase.auth.onAuthStateChange((event, session) => {
