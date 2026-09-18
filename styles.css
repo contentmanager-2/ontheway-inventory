@@ -119,6 +119,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--line); font-size: 12px; }
 .product-brand { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .product-content h3 { margin: 6px 0 4px; font-size: 14px; }
 .product-meta { color: var(--muted); font-size: 10px; }
+.source-count { display: inline-flex; width: fit-content; margin-top: 8px; padding: 5px 8px; border-radius: 999px; color: #6f665b; background: #f1ece5; font-size: 10px; font-weight: 700; }
 .product-price { display: flex; justify-content: space-between; align-items: end; margin-top: 16px; }
 .product-price strong { font-size: 16px; }
 .product-price small { display: block; color: var(--muted); margin-bottom: 3px; }

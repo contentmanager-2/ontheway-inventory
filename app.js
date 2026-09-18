@@ -1,3 +1,9 @@
+import {
+  createEssentialsVariants,
+  isEssentialsListing,
+  normalizeAvitoListing,
+} from "./avito-normalizer.js";
+
 const STORAGE_KEY = "ontheway-mvp-v1";
 
 const money = new Intl.NumberFormat("ru-RU", {
@@ -240,7 +246,7 @@ function renderInventory() {
   const query = document.querySelector("#inventory-search").value.trim().toLowerCase();
   const status = document.querySelector("#inventory-status").value;
   const filtered = state.items.filter((item) => {
-    const haystack = `${item.sku} ${item.brand} ${item.name} ${item.category}`.toLowerCase();
+    const haystack = `${item.sku} ${item.brand} ${item.name} ${item.category} ${item.color || ""}`.toLowerCase();
     return haystack.includes(query) && (status === "all" || item.status === status);
   });
   const counts = Object.keys(statusLabels).map((key) => `<span class="summary-chip">${statusLabels[key]}: <strong>${state.items.filter((item) => item.status === key).length}</strong></span>`);
@@ -249,7 +255,10 @@ function renderInventory() {
     const visual = item.image
       ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.brand)} ${escapeHtml(item.name)}" loading="lazy" />`
       : `<div class="placeholder">${escapeHtml(item.brand.slice(0, 2).toUpperCase())}</div>`;
-    return `<article class="product-card"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status]}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.size || "Без размера")}</span><div class="product-price"><div><small>Цена</small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
+    const sources = item.sourceListingIds?.length
+      ? `<span class="source-count">${item.sourceListingIds.length} объявл. Авито</span>`
+      : "";
+    return `<article class="product-card"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status]}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.size || "Без размера")}</span>${sources}<div class="product-price"><div><small>Цена</small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
   }).join("");
   document.querySelector("#inventory-empty").classList.toggle("hidden", filtered.length > 0);
 }
@@ -439,19 +448,52 @@ async function importAvitoFile(file) {
     showToast("В файле нет списка объявлений");
     return;
   }
-  const existingAvitoIds = new Set(state.items.map((item) => String(item.avitoItemId || "")).filter(Boolean));
+  state.avitoListings ||= [];
+
+  const oldEssentialsDrafts = state.items.filter((item) =>
+    item.avitoItemId
+    && item.category === "Импортировано из Авито"
+    && item.status === "draft"
+    && Number(item.purchasePrice || 0) === 0
+    && isEssentialsListing({ title: item.name, description: item.notes }),
+  );
+  for (const item of oldEssentialsDrafts) {
+    if (!state.avitoListings.some((listing) => listing.id === String(item.avitoItemId))) {
+      state.avitoListings.push(normalizeAvitoListing({
+        avitoItemId: item.avitoItemId,
+        title: item.name,
+        description: item.notes,
+        price: item.listPrice,
+        image: item.image,
+        url: item.avitoUrl,
+      }));
+    }
+  }
+  const oldDraftIds = new Set(oldEssentialsDrafts.map((item) => item.id));
+  state.items = state.items.filter((item) => !oldDraftIds.has(item.id));
+
+  const existingAvitoIds = new Set([
+    ...state.items.map((item) => String(item.avitoItemId || "")),
+    ...state.avitoListings.map((listing) => String(listing.id || "")),
+  ].filter(Boolean));
   let maxSku = state.items.reduce((max, item) => Math.max(max, Number(item.sku.replace(/\D/g, "")) || 0), 0);
   let imported = 0;
   let skipped = 0;
   for (const source of incoming) {
-    const avitoItemId = String(source.avito_item_id || source.avitoItemId || "");
+    const listing = normalizeAvitoListing(source);
+    const avitoItemId = listing.id;
     if (!avitoItemId || existingAvitoIds.has(avitoItemId)) {
       skipped += 1;
       continue;
     }
+    state.avitoListings.push(listing);
+    existingAvitoIds.add(avitoItemId);
+    imported += 1;
+    if (isEssentialsListing(listing)) continue;
+
     maxSku += 1;
-    const title = String(source.title || "Без названия").trim();
-    const description = String(source.description || "").trim();
+    const title = listing.title;
+    const description = listing.description;
     state.items.push({
       id: uid("item"),
       sku: `OTW-${String(maxSku).padStart(4, "0")}`,
@@ -460,24 +502,45 @@ async function importAvitoFile(file) {
       category: "Импортировано из Авито",
       size: detectSizes(`${title} ${description}`),
       purchasePrice: 0,
-      listPrice: Number(source.price || 0),
+      listPrice: listing.price,
       status: "draft",
       measurements: "",
-      image: String(source.image || ""),
-      avitoUrl: String(source.url || ""),
+      image: listing.image,
+      avitoUrl: listing.url,
       avitoItemId,
       notes: description,
       createdAt: isoDate(),
     });
-    existingAvitoIds.add(avitoItemId);
-    imported += 1;
+  }
+
+  const essentialsListings = state.avitoListings.filter(isEssentialsListing);
+  const existingCatalogKeys = new Set(state.items.map((item) => item.catalogKey).filter(Boolean));
+  const normalizedVariants = createEssentialsVariants(
+    essentialsListings,
+    () => uid("item"),
+    () => `OTW-${String(++maxSku).padStart(4, "0")}`,
+  );
+  let variantsCreated = 0;
+  for (const variant of normalizedVariants) {
+    const existing = state.items.find((item) => item.catalogKey === variant.catalogKey);
+    if (existing) {
+      existing.sourceListingIds = variant.sourceListingIds;
+      if (!existing.listPrice) existing.listPrice = variant.listPrice;
+      if (!existing.image) existing.image = variant.image;
+      continue;
+    }
+    if (!existingCatalogKeys.has(variant.catalogKey)) {
+      state.items.push({ ...variant, createdAt: isoDate() });
+      existingCatalogKeys.add(variant.catalogKey);
+      variantsCreated += 1;
+    }
   }
   saveState();
   renderAll();
   changeView("inventory");
   document.querySelector("#inventory-status").value = "draft";
   renderInventory();
-  showToast(`Импортировано: ${imported}${skipped ? ` · пропущено: ${skipped}` : ""}`);
+  showToast(`Объявлений: +${imported} · вариантов Essentials: +${variantsCreated}${skipped ? ` · уже были: ${skipped}` : ""}`);
 }
 
 function amountAfterKeyword(message, words) {

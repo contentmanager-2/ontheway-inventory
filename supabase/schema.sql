@@ -10,6 +10,9 @@ create table public.items (
   name text not null,
   brand text not null,
   category text,
+  catalog_key text unique,
+  product_type text,
+  color text,
   size text,
   measurements text,
   notes text,
@@ -21,6 +24,26 @@ create table public.items (
   avito_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+-- Объявление Авито является источником, а не единицей товарного остатка.
+-- Одно объявление-комплект может быть связано с несколькими вариантами.
+create table public.avito_listings (
+  id bigint primary key,
+  title text not null,
+  description text,
+  price numeric(12,2) not null default 0,
+  image_url text,
+  url text not null,
+  captured_at timestamptz,
+  source_payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table public.item_avito_listings (
+  item_id uuid not null references public.items(id) on delete cascade,
+  avito_listing_id bigint not null references public.avito_listings(id) on delete cascade,
+  primary key (item_id, avito_listing_id)
 );
 
 create table public.item_images (
@@ -72,6 +95,8 @@ create table public.audit_log (
 );
 
 alter table public.items enable row level security;
+alter table public.avito_listings enable row level security;
+alter table public.item_avito_listings enable row level security;
 alter table public.item_images enable row level security;
 alter table public.sales enable row level security;
 alter table public.expenses enable row level security;
@@ -79,6 +104,10 @@ alter table public.audit_log enable row level security;
 
 create policy "authenticated users manage items"
   on public.items for all to authenticated using (true) with check (true);
+create policy "authenticated users manage avito listings"
+  on public.avito_listings for all to authenticated using (true) with check (true);
+create policy "authenticated users manage item avito links"
+  on public.item_avito_listings for all to authenticated using (true) with check (true);
 create policy "authenticated users manage item images"
   on public.item_images for all to authenticated using (true) with check (true);
 create policy "authenticated users manage sales"
