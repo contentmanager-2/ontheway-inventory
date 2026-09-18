@@ -208,6 +208,12 @@ async function loadRemoteState() {
     state = normalizeState(data.state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } else {
+    const isLocalSetup = ["127.0.0.1", "localhost"].includes(window.location.hostname);
+    if (!isLocalSetup) {
+      const setupError = new Error("WORKSPACE_NOT_INITIALIZED");
+      setupError.code = "WORKSPACE_NOT_INITIALIZED";
+      throw setupError;
+    }
     const { error: createError } = await supabase.from("workspace_state").insert({
       id: WORKSPACE_ID,
       state,
@@ -1027,7 +1033,11 @@ async function enterApp(session) {
     console.error(error);
     remoteReady = false;
     setSyncStatus("База ещё не настроена", true);
-    showAuthMessage("Таблицы Supabase ещё не установлены. Завершите настройку базы и повторите вход.");
+    showAuthMessage(
+      error.code === "WORKSPACE_NOT_INITIALIZED"
+        ? "Первый вход нужно выполнить в локальной версии на основном компьютере — так текущий каталог безопасно перенесётся в общую базу."
+        : "Не удалось подключиться к общей базе. Проверьте настройки Supabase и повторите вход.",
+    );
     document.querySelector("#auth-screen").classList.remove("hidden");
     document.querySelector("#app-shell").classList.add("hidden");
     return;
