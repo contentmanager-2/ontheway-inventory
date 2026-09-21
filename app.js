@@ -1023,6 +1023,22 @@ function clearAuthMessage() {
   node.style.background = "";
 }
 
+function showLoginForm() {
+  document.querySelector("#auth-title").textContent = "Вход в магазин";
+  document.querySelector("#auth-copy").textContent = "Войдите с рабочего телефона или компьютера. Каталог и продажи будут общими для всей команды.";
+  document.querySelector("#auth-form").classList.remove("hidden");
+  document.querySelector("#password-form").classList.add("hidden");
+}
+
+function showPasswordForm() {
+  document.querySelector("#auth-title").textContent = "Установить пароль";
+  document.querySelector("#auth-copy").textContent = "Придумайте новый пароль для аккаунта владельца. После сохранения выполните первый вход в локальной версии.";
+  document.querySelector("#auth-form").classList.add("hidden");
+  document.querySelector("#password-form").classList.remove("hidden");
+  document.querySelector("#password-form").reset();
+  clearAuthMessage();
+}
+
 async function enterApp(session) {
   if (!session?.user) return;
   currentUser = session.user;
@@ -1040,6 +1056,7 @@ async function enterApp(session) {
     );
     document.querySelector("#auth-screen").classList.remove("hidden");
     document.querySelector("#app-shell").classList.add("hidden");
+    if (error.code === "WORKSPACE_NOT_INITIALIZED") showPasswordForm();
     return;
   }
   repairImportedBrands();
@@ -1059,6 +1076,7 @@ function leaveApp() {
   }
   document.querySelector("#app-shell").classList.add("hidden");
   document.querySelector("#auth-screen").classList.remove("hidden");
+  showLoginForm();
 }
 
 document.querySelector("#auth-form").addEventListener("submit", async (event) => {
@@ -1077,10 +1095,50 @@ document.querySelector("#auth-form").addEventListener("submit", async (event) =>
   if (error) showAuthMessage(error.message === "Invalid login credentials" ? "Неверный email или пароль." : error.message);
 });
 
+document.querySelector("#password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearAuthMessage();
+  const form = event.currentTarget;
+  const password = form.elements.password.value;
+  if (password !== form.elements.passwordConfirm.value) {
+    showAuthMessage("Пароли не совпадают.");
+    return;
+  }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = "Сохраняем…";
+  const { error } = await supabase.auth.updateUser({ password });
+  submit.disabled = false;
+  submit.textContent = "Сохранить пароль";
+  if (error) {
+    showAuthMessage(error.message);
+    return;
+  }
+  await supabase.auth.signOut();
+  showLoginForm();
+  showAuthMessage("Пароль сохранён. Теперь войдите в локальной версии на основном компьютере.", true);
+});
+
+document.querySelector("#reset-password").addEventListener("click", async () => {
+  const form = document.querySelector("#auth-form");
+  const email = form.elements.email.value.trim();
+  if (!email) {
+    showAuthMessage("Сначала укажите email.");
+    form.elements.email.focus();
+    return;
+  }
+  clearAuthMessage();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://contentmanager-2.github.io/ontheway-inventory/",
+  });
+  showAuthMessage(error ? error.message : "Письмо для установки нового пароля отправлено. Откройте последнюю ссылку из письма.", !error);
+});
+
 document.querySelector("#sign-out").addEventListener("click", () => supabase.auth.signOut());
 
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") leaveApp();
+  if (event === "PASSWORD_RECOVERY") showPasswordForm();
   if (event === "SIGNED_IN" && session) window.setTimeout(() => enterApp(session), 0);
 });
 

@@ -16,13 +16,19 @@
       <div class="auth-card">
         <div class="auth-brand"><span class="brand-mark">OTW</span><span>OnTheWay</span></div>
         <p class="eyebrow">Закрытая система учёта</p>
-        <h1>Вход в магазин</h1>
-        <p class="auth-copy">Войдите с рабочего телефона или компьютера. Каталог и продажи будут общими для всей команды.</p>
+        <h1 id="auth-title">Вход в магазин</h1>
+        <p class="auth-copy" id="auth-copy">Войдите с рабочего телефона или компьютера. Каталог и продажи будут общими для всей команды.</p>
+        <p class="auth-error hidden" id="auth-error"></p>
         <form id="auth-form" class="auth-form">
           <label><span>Email</span><input name="email" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
           <label><span>Пароль</span><input name="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Не менее 6 символов" /></label>
-          <p class="auth-error hidden" id="auth-error"></p>
           <button class="button button-primary" type="submit">Войти</button>
+          <button class="auth-link" id="reset-password" type="button">Не получается войти?</button>
+        </form>
+        <form id="password-form" class="auth-form hidden">
+          <label><span>Новый пароль</span><input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="Не менее 8 символов" /></label>
+          <label><span>Повторите пароль</span><input name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="button button-primary" type="submit">Сохранить пароль</button>
         </form>
         <p class="auth-note">Доступ выдаётся владельцем магазина по приглашению на email.</p>
       </div>
