@@ -51,9 +51,6 @@
           <button class="nav-item" data-view="sales">
             <span>Продажи</span><span class="nav-index">03</span>
           </button>
-          <button class="nav-item" data-view="expenses">
-            <span>Расходы</span><span class="nav-index">04</span>
-          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -109,14 +106,6 @@
               </div>
               <div class="chart" id="revenue-chart" aria-label="График выручки"></div>
             </article>
-
-            <article class="panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">Контроль</p><h3>Давно в продаже</h3></div>
-                <button class="text-button" data-go="inventory">Все вещи →</button>
-              </div>
-              <div class="aging-list" id="aging-list"></div>
-            </article>
           </div>
 
           <article class="panel recent-panel">
@@ -153,13 +142,6 @@
           </article>
         </section>
 
-        <section class="view" id="view-expenses">
-          <div class="section-intro"><p>Отдельные расходы помогают отличать прибыль с конкретной вещи от чистого результата бизнеса.</p><button class="button button-primary" id="open-add-expense">+ Добавить расход</button></div>
-          <div class="metric-grid" id="expense-metrics"></div>
-          <article class="panel">
-            <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Категория</th><th>Комментарий</th><th>Связь</th><th>Сумма</th></tr></thead><tbody id="expenses-table"></tbody></table></div>
-          </article>
-        </section>
       </main>
     </div>
 
@@ -244,20 +226,6 @@
         <label><span>Сообщение</span><textarea name="message" rows="5" required placeholder="Продал…"></textarea></label>
         <div id="ai-result" class="ai-result hidden"></div>
         <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Разобрать сообщение</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="expense-dialog">
-      <form method="dialog" id="expense-form" class="dialog-form">
-        <div class="dialog-heading"><div><p class="eyebrow">Финансы</p><h2>Добавить расход</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
-        <div class="form-grid">
-          <label><span>Категория</span><select name="category"><option>Продвижение Авито</option><option>Упаковка</option><option>Доставка</option><option>Аренда</option><option>Зарплата</option><option>Налоги</option><option>Сервисы</option><option>Прочее</option></select></label>
-          <label><span>Сумма *</span><input name="amount" type="number" min="0" required /></label>
-          <label><span>Дата</span><input name="date" type="date" /></label>
-          <label><span>Связь с вещью</span><select name="itemId" id="expense-item-select"><option value="">Общий расход</option></select></label>
-          <label class="span-2"><span>Комментарий</span><textarea name="note" rows="3"></textarea></label>
-        </div>
-        <div class="dialog-actions"><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить расход</button></div>
       </form>
     </dialog>
 

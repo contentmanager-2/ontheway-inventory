@@ -37,7 +37,6 @@ const viewMeta = {
   dashboard: ["Сегодня", "Финансовый обзор"],
   inventory: ["Каталог OnTheWay", "Вещи"],
   sales: ["Финансовый журнал", "Продажи"],
-  expenses: ["Операционные затраты", "Расходы"],
 };
 
 function isoDate(date = new Date()) {
@@ -142,24 +141,41 @@ function normalizeState(nextState) {
   normalized.sales ||= [];
   normalized.expenses ||= [];
   normalized.deletedCatalogKeys ||= [];
+  normalized.migrations ||= {};
   return normalized;
 }
 
 const DEMO_ITEM_IDS = new Set(Array.from({ length: 8 }, (_, index) => `item-${index + 1}`));
 const DEMO_SALE_IDS = new Set(["sale-1", "sale-2", "sale-3", "sale-history-1", "sale-history-2"]);
+const DEMO_EXPENSE_IDS = new Set(["expense-1", "expense-2", "expense-3"]);
 
-function removeDemoCatalogData(nextState) {
+function migrateWorkspaceState(nextState) {
   const itemCount = nextState.items.length;
   const saleCount = nextState.sales.length;
+  const expenseCount = nextState.expenses.length;
   nextState.items = nextState.items.filter((item) => !DEMO_ITEM_IDS.has(item.id));
   nextState.sales = nextState.sales.filter(
     (sale) => !DEMO_SALE_IDS.has(sale.id) && !DEMO_ITEM_IDS.has(sale.itemId),
   );
-  return nextState.items.length !== itemCount || nextState.sales.length !== saleCount;
+  nextState.expenses = nextState.expenses.filter((expense) => !DEMO_EXPENSE_IDS.has(expense.id));
+  let changed = nextState.items.length !== itemCount
+    || nextState.sales.length !== saleCount
+    || nextState.expenses.length !== expenseCount;
+  if (!nextState.migrations.avitoMinimumStockV1) {
+    nextState.items.forEach((item) => {
+      const importedFromAvito = Boolean(item.avitoItemId || item.sourceListingIds?.length);
+      if (!importedFromAvito || item.status === "archived") return;
+      if (itemQuantity(item) < 1) item.quantity = 1;
+      if (item.status === "draft") item.status = "available";
+    });
+    nextState.migrations.avitoMinimumStockV1 = true;
+    changed = true;
+  }
+  return changed;
 }
 
 let state = normalizeState(loadState());
-removeDemoCatalogData(state);
+migrateWorkspaceState(state);
 let currentView = "dashboard";
 let currentUser = null;
 let remoteReady = false;
@@ -220,9 +236,9 @@ async function loadRemoteState() {
   if (error) throw error;
   if (data?.state) {
     state = normalizeState(data.state);
-    const removedDemoData = removeDemoCatalogData(state);
+    const migratedWorkspace = migrateWorkspaceState(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (removedDemoData) syncRequested = true;
+    if (migratedWorkspace) syncRequested = true;
   } else {
     const isLocalSetup = ["127.0.0.1", "localhost"].includes(window.location.hostname);
     if (!isLocalSetup) {
@@ -339,7 +355,6 @@ function renderDashboard() {
   ].join("");
 
   renderChart();
-  renderAging();
   renderRecentSales();
 }
 
@@ -360,17 +375,6 @@ function renderChart() {
   document.querySelector("#revenue-chart").innerHTML = buckets
     .map((bucket) => `<div class="chart-column"><div class="chart-bar" data-value="${money.format(bucket.value)}" style="height:${Math.max(3, (bucket.value / max) * 88)}%"></div><span>${bucket.label}</span></div>`)
     .join("");
-}
-
-function renderAging() {
-  const items = state.items
-    .filter((item) => item.status === "available")
-    .map((item) => ({ ...item, age: Math.max(0, Math.round((Date.now() - new Date(item.createdAt).getTime()) / 86400000)) }))
-    .sort((a, b) => b.age - a.age)
-    .slice(0, 4);
-  document.querySelector("#aging-list").innerHTML = items.length
-    ? items.map((item) => `<div class="aging-row"><div class="mini-thumb"></div><div><strong>${escapeHtml(item.brand)} · ${escapeHtml(item.name)}</strong><small>${item.sku} · ${money.format(item.listPrice)}</small></div><span class="aging-days">${item.age} дн.</span></div>`).join("")
-    : `<p class="muted">Все товары проданы или находятся в подготовке.</p>`;
 }
 
 function renderRecentSales() {
@@ -408,7 +412,7 @@ function renderInventory() {
       ? `<img src="${escapeHtml(image)}" alt="Fear Of God Essentials" loading="lazy" />`
       : `<div class="placeholder">FOG</div>`;
     const familyStatus = stock > 0 ? "В продаже" : essentials.every((item) => item.status === "archived") ? "Архив" : "Подготовка";
-    return `<article class="product-card family-card" data-essentials-card><div class="product-image">${visual}<span class="status-badge">${familyStatus}</span></div><div class="product-content"><span class="product-brand">Fear Of God Essentials</span><h3>Весь ассортимент Essentials</h3><p class="muted">Одна карточка для худи, штанов, футболок и шорт. Внутри — цвета, размеры, цены и точные остатки.</p><div class="family-stats"><div class="family-stat"><span>Остаток</span><strong>${stock} шт.</strong></div><div class="family-stat"><span>Вариантов в наличии</span><strong>${activeVariants} / ${essentials.length}</strong></div><div class="family-stat"><span>Источников Авито</span><strong>${sourceCount}</strong></div></div><button type="button" class="button button-primary family-open">Открыть ассортимент →</button></div></article>`;
+    return `<article class="product-card family-card" data-essentials-card><div class="product-image">${visual}<span class="status-badge">${familyStatus}</span></div><div class="product-content"><span class="product-brand">Fear Of God Essentials</span><h3>Весь ассортимент Essentials</h3><div class="family-stats"><div class="family-stat"><span>Остаток</span><strong>${stock} шт.</strong></div><div class="family-stat"><span>Вариантов в наличии</span><strong>${activeVariants} / ${essentials.length}</strong></div><div class="family-stat"><span>Источников Авито</span><strong>${sourceCount}</strong></div></div><button type="button" class="button button-primary family-open">Открыть ассортимент →</button></div></article>`;
   })() : "";
 
   const renderRegularCard = (item) => {
@@ -444,34 +448,16 @@ function renderSales() {
     : `<tr><td colspan="7">Продаж пока нет</td></tr>`;
 }
 
-function renderExpenses() {
-  const monthly = state.expenses.filter((expense) => isCurrentMonth(expense.date));
-  const total = monthly.reduce((sum, expense) => sum + expense.amount, 0);
-  const avito = monthly.filter((expense) => expense.category.includes("Авито")).reduce((sum, expense) => sum + expense.amount, 0);
-  document.querySelector("#expense-metrics").innerHTML = [
-    metricCard("Расходы месяца", money.format(total)),
-    metricCard("Авито", money.format(avito)),
-    metricCard("Операций", monthly.length),
-    metricCard("Средний расход", money.format(monthly.length ? total / monthly.length : 0)),
-  ].join("");
-  const expenses = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date));
-  document.querySelector("#expenses-table").innerHTML = expenses.length
-    ? expenses.map((expense) => `<tr><td>${shortDate.format(new Date(`${expense.date}T12:00:00`))}</td><td>${escapeHtml(expense.category)}</td><td>${escapeHtml(expense.note || "—")}</td><td>${expense.itemId ? escapeHtml(getItem(expense.itemId)?.sku || "Архив") : "Общий"}</td><td class="negative">−${money.format(expense.amount)}</td></tr>`).join("")
-    : `<tr><td colspan="5">Расходов пока нет</td></tr>`;
-}
-
 function renderSelects() {
   const available = state.items.filter((item) => item.status === "available" && itemQuantity(item) > 0);
   const saleOptions = available.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)} · ${escapeHtml(item.size || "—")} · ${itemQuantity(item)} шт.</option>`).join("");
   document.querySelector("#sale-item-select").innerHTML = `<option value="">Выберите вещь</option>${saleOptions}`;
-  document.querySelector("#expense-item-select").innerHTML = `<option value="">Общий расход</option>${state.items.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)}</option>`).join("")}`;
 }
 
 function renderAll() {
   renderDashboard();
   renderInventory();
   renderSales();
-  renderExpenses();
   renderSelects();
 }
 
@@ -696,22 +682,6 @@ function addSale(form) {
   showToast(item.quantity > 0 ? `${item.sku}: осталось ${item.quantity} шт.` : `${item.sku} продана и перенесена в архив`);
 }
 
-function addExpense(form) {
-  const data = new FormData(form);
-  state.expenses.unshift({
-    id: uid("expense"),
-    category: data.get("category"),
-    amount: Number(data.get("amount")),
-    date: data.get("date") || isoDate(),
-    itemId: data.get("itemId"),
-    note: data.get("note").trim(),
-  });
-  saveState();
-  renderAll();
-  document.querySelector("#expense-dialog").close();
-  showToast("Расход сохранён");
-}
-
 const brandPatterns = [
   ["Fear Of God Essentials", /(?:fear\s+of\s+god\s+essentials|essentials\s+fear\s+of\s+god)/i],
   ["Fear Of God", /fear\s+of\s+god/i],
@@ -850,8 +820,8 @@ async function importAvitoFile(file) {
       size: detectSizes(`${title} ${description}`),
       purchasePrice: 0,
       listPrice: listing.price,
-      status: "draft",
-      quantity: 0,
+      status: "available",
+      quantity: 1,
       measurements: "",
       image: listing.image,
       avitoUrl: listing.url,
@@ -945,13 +915,6 @@ document.querySelectorAll("[data-go]").forEach((button) => button.addEventListen
 document.querySelector("#mobile-menu").addEventListener("click", () => document.querySelector(".sidebar").classList.toggle("open"));
 document.querySelector("#open-add-item").addEventListener("click", openItemDialog);
 document.querySelector("#open-manual-sale").addEventListener("click", () => openSaleDialog());
-document.querySelector("#open-add-expense").addEventListener("click", () => {
-  const form = document.querySelector("#expense-form");
-  form.reset();
-  form.elements.date.value = isoDate();
-  document.querySelector("#expense-dialog").showModal();
-});
-
 function openAiDialog() {
   const form = document.querySelector("#ai-form");
   form.reset();
@@ -1011,11 +974,6 @@ document.querySelector("#sale-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (event.submitter?.value === "cancel") return document.querySelector("#sale-dialog").close();
   addSale(event.currentTarget);
-});
-document.querySelector("#expense-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  if (event.submitter?.value === "cancel") return document.querySelector("#expense-dialog").close();
-  addExpense(event.currentTarget);
 });
 document.querySelector("#ai-form").addEventListener("submit", (event) => {
   event.preventDefault();

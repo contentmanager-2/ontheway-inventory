@@ -87,6 +87,7 @@ button { color: inherit; }
 .metric-card strong { display: block; margin-top: 12px; font-size: 25px; letter-spacing: -.04em; }
 .metric-card small { display: block; margin-top: 6px; color: var(--muted); }
 .dashboard-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; margin-top: 18px; }
+.dashboard-grid > :only-child { grid-column: 1 / -1; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
 .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
 .panel h3 { margin: 6px 0 0; letter-spacing: -.035em; font-size: 19px; }
