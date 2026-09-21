@@ -172,6 +172,14 @@ function migrateWorkspaceState(nextState) {
     nextState.migrations.avitoMinimumStockV1 = true;
     changed = true;
   }
+  if (!nextState.migrations.yandexGalleryPilotV1) {
+    const pilotItem = nextState.items.find((item) => item.sku === "OTW-0267");
+    if (pilotItem) {
+      pilotItem.photoFolderUrl = "https://disk.yandex.ru/d/KsDa-M15Olz6Rw";
+      nextState.migrations.yandexGalleryPilotV1 = true;
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -418,7 +426,8 @@ function renderInventory() {
     const sources = item.sourceListingIds?.length
       ? `<span class="source-count">${item.sourceListingIds.length} объявл. Авито</span>`
       : "";
-    return `<article class="product-card" data-edit-item="${item.id}"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status] || item.status}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.color || "Без цвета")} · ${escapeHtml(item.size || "Без размера")}</span>${sources}<div class="product-price"><div><small>Цена · <span class="stock-count">${itemQuantity(item)} шт.</span></small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" && itemQuantity(item) > 0 ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
+    const gallery = item.photoFolderUrl ? `<span class="source-count photo-source">Фото на Яндекс Диске</span>` : "";
+    return `<article class="product-card" data-edit-item="${item.id}"><div class="product-image">${visual}<span class="status-badge">${statusLabels[item.status] || item.status}</span></div><div class="product-content"><span class="product-brand">${escapeHtml(item.brand)}</span><h3>${escapeHtml(item.name)}</h3><span class="product-meta">${item.sku} · ${escapeHtml(item.color || "Без цвета")} · ${escapeHtml(item.size || "Без размера")}</span>${sources}${gallery}<div class="product-price"><div><small>Цена · <span class="stock-count">${itemQuantity(item)} шт.</span></small><strong>${money.format(item.listPrice)}</strong></div>${item.status === "available" && itemQuantity(item) > 0 ? `<button class="sell-button" data-sell="${item.id}" title="Продать">→</button>` : ""}</div></div></article>`;
   };
   const brandGroups = Map.groupBy
     ? Map.groupBy(regular, (item) => item.brand || "Без бренда")
@@ -487,11 +496,71 @@ function openEditItemDialog(itemId) {
   if (!item) return;
   const form = document.querySelector("#edit-item-form");
   form.reset();
-  ["id", "name", "brand", "category", "status", "color", "size", "quantity", "purchasePrice", "listPrice", "measurements", "image", "avitoUrl", "notes"].forEach((field) => {
+  ["id", "name", "brand", "category", "status", "color", "size", "quantity", "purchasePrice", "listPrice", "measurements", "image", "photoFolderUrl", "avitoUrl", "notes"].forEach((field) => {
     form.elements[field].value = item[field] ?? "";
   });
   document.querySelector("#edit-item-title").textContent = `${item.sku} · ${item.name}`;
   document.querySelector("#edit-item-dialog").showModal();
+  renderYandexGallery(item);
+}
+
+const YANDEX_PUBLIC_API = "https://cloud-api.yandex.net/v1/disk/public/resources";
+let activeYandexPhotos = [];
+let activeYandexPublicKey = "";
+
+async function fetchYandexResource(publicKey, path = "", previewSize = "M") {
+  const url = new URL(YANDEX_PUBLIC_API);
+  url.searchParams.set("public_key", publicKey);
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("preview_size", previewSize);
+  url.searchParams.set("preview_crop", "false");
+  if (path) url.searchParams.set("path", path);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Yandex Disk: ${response.status}`);
+  return response.json();
+}
+
+async function renderYandexGallery(item) {
+  const gallery = document.querySelector("#item-photo-gallery");
+  activeYandexPhotos = [];
+  activeYandexPublicKey = item.photoFolderUrl || "";
+  if (!activeYandexPublicKey) {
+    gallery.classList.add("hidden");
+    gallery.innerHTML = "";
+    return;
+  }
+  gallery.classList.remove("hidden");
+  gallery.innerHTML = `<div class="gallery-heading"><div><span class="eyebrow">Детальные фото</span><h3>Загружаем с Яндекс Диска…</h3></div></div>`;
+  try {
+    const resource = await fetchYandexResource(activeYandexPublicKey);
+    activeYandexPhotos = (resource._embedded?.items || [])
+      .filter((entry) => entry.type === "file" && entry.mime_type?.startsWith("image/"))
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    const photos = activeYandexPhotos.map((photo, index) => `<button class="gallery-thumb" type="button" data-yandex-photo="${index}" title="${escapeHtml(photo.name)}"><img src="${escapeHtml(photo.preview || "")}" alt="${escapeHtml(photo.name)}" loading="lazy" /><span>${index + 1}</span></button>`).join("");
+    gallery.innerHTML = `<div class="gallery-heading"><div><span class="eyebrow">Детальные фото</span><h3>${activeYandexPhotos.length} фото</h3></div><a href="${escapeHtml(activeYandexPublicKey)}" target="_blank" rel="noopener">Открыть папку ↗</a></div>${photos ? `<div class="gallery-grid">${photos}</div>` : `<p class="muted">В папке пока нет изображений.</p>`}`;
+  } catch (error) {
+    console.error(error);
+    gallery.innerHTML = `<div class="gallery-heading"><div><span class="eyebrow">Детальные фото</span><h3>Не удалось загрузить папку</h3></div><a href="${escapeHtml(activeYandexPublicKey)}" target="_blank" rel="noopener">Открыть на Яндекс Диске ↗</a></div><p class="muted">Проверьте, что доступ к папке открыт по ссылке.</p>`;
+  }
+}
+
+async function openYandexPhoto(index) {
+  const photo = activeYandexPhotos[index];
+  if (!photo) return;
+  const dialog = document.querySelector("#photo-viewer-dialog");
+  const image = document.querySelector("#photo-viewer-image");
+  const download = document.querySelector("#download-photo-original");
+  image.src = photo.preview || "";
+  document.querySelector("#photo-viewer-name").textContent = photo.name;
+  download.href = photo.file || activeYandexPublicKey;
+  dialog.showModal();
+  try {
+    const full = await fetchYandexResource(activeYandexPublicKey, photo.path, "XXXL");
+    if (full.preview) image.src = full.preview;
+    if (full.file) download.href = full.file;
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function renderEssentialsMatrix() {
@@ -558,6 +627,7 @@ function addItem(form) {
     status: quantity > 0 ? "available" : "draft",
     measurements: data.get("measurements").trim(),
     image: data.get("image").trim(),
+    photoFolderUrl: data.get("photoFolderUrl").trim(),
     avitoUrl: data.get("avitoUrl").trim(),
     notes: data.get("notes").trim(),
     createdAt: isoDate(),
@@ -583,6 +653,7 @@ function saveEditedItem(form) {
   item.listPrice = Number(data.get("listPrice") || 0);
   item.measurements = data.get("measurements").trim();
   item.image = data.get("image").trim();
+  item.photoFolderUrl = data.get("photoFolderUrl").trim();
   item.avitoUrl = data.get("avitoUrl").trim();
   item.notes = data.get("notes").trim();
   item.status = data.get("status");
@@ -979,6 +1050,11 @@ document.querySelector("#product-grid").addEventListener("click", (event) => {
   const card = event.target.closest("[data-edit-item]");
   if (card) openEditItemDialog(card.dataset.editItem);
 });
+document.querySelector("#item-photo-gallery").addEventListener("click", (event) => {
+  const photo = event.target.closest("[data-yandex-photo]");
+  if (photo) openYandexPhoto(Number(photo.dataset.yandexPhoto));
+});
+document.querySelector("#close-photo-viewer").addEventListener("click", () => document.querySelector("#photo-viewer-dialog").close());
 document.querySelector("#sale-form").addEventListener("input", updateSalePreview);
 document.querySelector("#sale-form").addEventListener("change", updateSalePreview);
 

@@ -9,7 +9,7 @@
       content="OnTheWay — учёт брендовой одежды, продаж и финансов"
     />
     <title>OnTheWay — учёт вещей</title>
-    <link rel="stylesheet" href="styles.css?v=20260921-essentials-2" />
+    <link rel="stylesheet" href="styles.css?v=20260921-gallery-1" />
   </head>
   <body>
     <section class="loading-screen" id="loading-screen" aria-live="polite">
@@ -176,6 +176,7 @@
           <label><span>Плановая цена *</span><input name="listPrice" type="number" min="0" required placeholder="42000" /></label>
           <label class="span-2"><span>Замеры</span><input name="measurements" placeholder="Плечи 48, грудь 58, длина 71 см" /></label>
           <label class="span-2"><span>Ссылка на фото</span><input name="image" type="url" placeholder="https://…" /></label>
+          <label class="span-2"><span>Папка с фото на Яндекс Диске</span><input name="photoFolderUrl" type="url" placeholder="https://disk.yandex.ru/d/…" /></label>
           <label class="span-2"><span>Ссылка на Авито</span><input name="avitoUrl" type="url" placeholder="https://www.avito.ru/…" /></label>
           <label class="span-2"><span>Дополнительная информация</span><textarea name="notes" rows="3" placeholder="Состояние, комплект, нюансы"></textarea></label>
         </div>
@@ -199,9 +200,11 @@
           <label><span>Цена продажи</span><input name="listPrice" type="number" min="0" /></label>
           <label class="span-2"><span>Замеры</span><input name="measurements" /></label>
           <label class="span-2"><span>Ссылка на фото</span><input name="image" type="url" /></label>
+          <label class="span-2"><span>Папка с фото на Яндекс Диске</span><input name="photoFolderUrl" type="url" placeholder="https://disk.yandex.ru/d/…" /></label>
           <label class="span-2"><span>Ссылка на Авито</span><input name="avitoUrl" type="url" /></label>
           <label class="span-2"><span>Дополнительная информация</span><textarea name="notes" rows="4"></textarea></label>
         </div>
+        <section class="item-photo-gallery hidden" id="item-photo-gallery"></section>
         <div class="dialog-actions dialog-actions-split">
           <div><button class="button button-danger" type="button" id="delete-item">Удалить навсегда</button><button class="button button-ghost" type="button" id="archive-item">В архив</button></div>
           <div><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить</button></div>
@@ -260,7 +263,15 @@
       </form>
     </dialog>
 
+    <dialog id="photo-viewer-dialog" class="photo-viewer-dialog">
+      <div class="photo-viewer">
+        <button class="icon-button photo-viewer-close" type="button" id="close-photo-viewer" aria-label="Закрыть">×</button>
+        <div class="photo-viewer-stage"><img id="photo-viewer-image" alt="Детальная фотография вещи" /></div>
+        <div class="photo-viewer-footer"><span id="photo-viewer-name"></span><a class="button button-primary" id="download-photo-original" target="_blank" rel="noopener">Скачать оригинал</a></div>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status"></div>
-    <script type="module" src="app.js?v=20260921-essentials-2"></script>
+    <script type="module" src="app.js?v=20260921-gallery-1"></script>
   </body>
 </html>
