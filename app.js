@@ -1056,7 +1056,11 @@ async function enterApp(session) {
     );
     document.querySelector("#auth-screen").classList.remove("hidden");
     document.querySelector("#app-shell").classList.add("hidden");
-    if (error.code === "WORKSPACE_NOT_INITIALIZED") showPasswordForm();
+    if (error.code === "WORKSPACE_NOT_INITIALIZED") {
+      showLoginForm();
+      await supabase.auth.signOut();
+      showAuthMessage("Первый вход нужно выполнить по локальному адресу на основном компьютере — так текущий каталог безопасно перенесётся в общую базу.");
+    }
     return;
   }
   repairImportedBrands();
