@@ -37,6 +37,7 @@ const viewMeta = {
   dashboard: ["Сегодня", "Финансовый обзор"],
   inventory: ["Каталог OnTheWay", "Вещи"],
   sales: ["Финансовый журнал", "Продажи"],
+  expenses: ["Операционные затраты", "Расходы"],
 };
 
 function isoDate(date = new Date()) {
@@ -448,16 +449,34 @@ function renderSales() {
     : `<tr><td colspan="7">Продаж пока нет</td></tr>`;
 }
 
+function renderExpenses() {
+  const monthly = state.expenses.filter((expense) => isCurrentMonth(expense.date));
+  const total = monthly.reduce((sum, expense) => sum + expense.amount, 0);
+  const avito = monthly.filter((expense) => expense.category.includes("Авито")).reduce((sum, expense) => sum + expense.amount, 0);
+  document.querySelector("#expense-metrics").innerHTML = [
+    metricCard("Расходы месяца", money.format(total)),
+    metricCard("Авито", money.format(avito)),
+    metricCard("Операций", monthly.length),
+    metricCard("Средний расход", money.format(monthly.length ? total / monthly.length : 0)),
+  ].join("");
+  const expenses = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date));
+  document.querySelector("#expenses-table").innerHTML = expenses.length
+    ? expenses.map((expense) => `<tr><td>${shortDate.format(new Date(`${expense.date}T12:00:00`))}</td><td>${escapeHtml(expense.category)}</td><td>${escapeHtml(expense.note || "—")}</td><td>${expense.itemId ? escapeHtml(getItem(expense.itemId)?.sku || "Архив") : "Общий"}</td><td class="negative">−${money.format(expense.amount)}</td></tr>`).join("")
+    : `<tr><td colspan="5">Расходов пока нет</td></tr>`;
+}
+
 function renderSelects() {
   const available = state.items.filter((item) => item.status === "available" && itemQuantity(item) > 0);
   const saleOptions = available.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)} · ${escapeHtml(item.size || "—")} · ${itemQuantity(item)} шт.</option>`).join("");
   document.querySelector("#sale-item-select").innerHTML = `<option value="">Выберите вещь</option>${saleOptions}`;
+  document.querySelector("#expense-item-select").innerHTML = `<option value="">Общий расход</option>${state.items.map((item) => `<option value="${item.id}">${item.sku} · ${escapeHtml(item.brand)} ${escapeHtml(item.name)}</option>`).join("")}`;
 }
 
 function renderAll() {
   renderDashboard();
   renderInventory();
   renderSales();
+  renderExpenses();
   renderSelects();
 }
 
@@ -680,6 +699,22 @@ function addSale(form) {
   renderAll();
   document.querySelector("#sale-dialog").close();
   showToast(item.quantity > 0 ? `${item.sku}: осталось ${item.quantity} шт.` : `${item.sku} продана и перенесена в архив`);
+}
+
+function addExpense(form) {
+  const data = new FormData(form);
+  state.expenses.unshift({
+    id: uid("expense"),
+    category: data.get("category"),
+    amount: Number(data.get("amount")),
+    date: data.get("date") || isoDate(),
+    itemId: data.get("itemId"),
+    note: data.get("note").trim(),
+  });
+  saveState();
+  renderAll();
+  document.querySelector("#expense-dialog").close();
+  showToast("Расход сохранён");
 }
 
 const brandPatterns = [
@@ -915,6 +950,12 @@ document.querySelectorAll("[data-go]").forEach((button) => button.addEventListen
 document.querySelector("#mobile-menu").addEventListener("click", () => document.querySelector(".sidebar").classList.toggle("open"));
 document.querySelector("#open-add-item").addEventListener("click", openItemDialog);
 document.querySelector("#open-manual-sale").addEventListener("click", () => openSaleDialog());
+document.querySelector("#open-add-expense").addEventListener("click", () => {
+  const form = document.querySelector("#expense-form");
+  form.reset();
+  form.elements.date.value = isoDate();
+  document.querySelector("#expense-dialog").showModal();
+});
 function openAiDialog() {
   const form = document.querySelector("#ai-form");
   form.reset();
@@ -975,6 +1016,11 @@ document.querySelector("#sale-form").addEventListener("submit", (event) => {
   if (event.submitter?.value === "cancel") return document.querySelector("#sale-dialog").close();
   addSale(event.currentTarget);
 });
+document.querySelector("#expense-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (event.submitter?.value === "cancel") return document.querySelector("#expense-dialog").close();
+  addExpense(event.currentTarget);
+});
 document.querySelector("#ai-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (event.submitter?.value === "cancel") return document.querySelector("#ai-dialog").close();
@@ -998,7 +1044,14 @@ function clearAuthMessage() {
   node.style.background = "";
 }
 
+function showAuthScreen() {
+  document.querySelector("#loading-screen").classList.add("hidden");
+  document.querySelector("#app-shell").classList.add("hidden");
+  document.querySelector("#auth-screen").classList.remove("hidden");
+}
+
 function showLoginForm() {
+  showAuthScreen();
   document.querySelector("#auth-title").textContent = "Вход в магазин";
   document.querySelector("#auth-copy").textContent = "Войдите с рабочего телефона или компьютера. Каталог и продажи будут общими для всей команды.";
   document.querySelector("#auth-form").classList.remove("hidden");
@@ -1006,6 +1059,7 @@ function showLoginForm() {
 }
 
 function showPasswordForm() {
+  showAuthScreen();
   document.querySelector("#auth-title").textContent = "Установить пароль";
   document.querySelector("#auth-copy").textContent = "Придумайте новый пароль для аккаунта владельца. После сохранения выполните первый вход в локальной версии.";
   document.querySelector("#auth-form").classList.add("hidden");
@@ -1024,13 +1078,12 @@ async function enterApp(session) {
     console.error(error);
     remoteReady = false;
     setSyncStatus("База ещё не настроена", true);
+    showAuthScreen();
     showAuthMessage(
       error.code === "WORKSPACE_NOT_INITIALIZED"
         ? "Первый вход нужно выполнить в локальной версии на основном компьютере — так текущий каталог безопасно перенесётся в общую базу."
         : "Не удалось подключиться к общей базе. Проверьте настройки Supabase и повторите вход.",
     );
-    document.querySelector("#auth-screen").classList.remove("hidden");
-    document.querySelector("#app-shell").classList.add("hidden");
     if (error.code === "WORKSPACE_NOT_INITIALIZED") {
       showLoginForm();
       await supabase.auth.signOut();
@@ -1040,6 +1093,7 @@ async function enterApp(session) {
   }
   repairImportedBrands();
   subscribeToRemoteChanges();
+  document.querySelector("#loading-screen").classList.add("hidden");
   document.querySelector("#auth-screen").classList.add("hidden");
   document.querySelector("#app-shell").classList.remove("hidden");
   if (viewMeta[requestedView]) changeView(requestedView);
@@ -1053,8 +1107,7 @@ function leaveApp() {
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
-  document.querySelector("#app-shell").classList.add("hidden");
-  document.querySelector("#auth-screen").classList.remove("hidden");
+  clearAuthMessage();
   showLoginForm();
 }
 
@@ -1124,6 +1177,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 async function bootstrap() {
   const { data } = await supabase.auth.getSession();
   if (data.session) await enterApp(data.session);
+  else showLoginForm();
 }
 
 bootstrap();
