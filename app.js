@@ -145,7 +145,21 @@ function normalizeState(nextState) {
   return normalized;
 }
 
+const DEMO_ITEM_IDS = new Set(Array.from({ length: 8 }, (_, index) => `item-${index + 1}`));
+const DEMO_SALE_IDS = new Set(["sale-1", "sale-2", "sale-3", "sale-history-1", "sale-history-2"]);
+
+function removeDemoCatalogData(nextState) {
+  const itemCount = nextState.items.length;
+  const saleCount = nextState.sales.length;
+  nextState.items = nextState.items.filter((item) => !DEMO_ITEM_IDS.has(item.id));
+  nextState.sales = nextState.sales.filter(
+    (sale) => !DEMO_SALE_IDS.has(sale.id) && !DEMO_ITEM_IDS.has(sale.itemId),
+  );
+  return nextState.items.length !== itemCount || nextState.sales.length !== saleCount;
+}
+
 let state = normalizeState(loadState());
+removeDemoCatalogData(state);
 let currentView = "dashboard";
 let currentUser = null;
 let remoteReady = false;
@@ -206,7 +220,9 @@ async function loadRemoteState() {
   if (error) throw error;
   if (data?.state) {
     state = normalizeState(data.state);
+    const removedDemoData = removeDemoCatalogData(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (removedDemoData) syncRequested = true;
   } else {
     const isLocalSetup = ["127.0.0.1", "localhost"].includes(window.location.hostname);
     if (!isLocalSetup) {
@@ -222,7 +238,8 @@ async function loadRemoteState() {
     if (createError) throw createError;
   }
   remoteReady = true;
-  setSyncStatus("Все изменения сохранены");
+  if (syncRequested) await flushRemoteState();
+  else setSyncStatus("Все изменения сохранены");
 }
 
 function subscribeToRemoteChanges() {
