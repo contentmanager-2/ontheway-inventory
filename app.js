@@ -408,12 +408,7 @@ function renderInventory() {
     const stock = visibleVariants.reduce((sum, item) => sum + itemQuantity(item), 0);
     const activeVariants = visibleVariants.filter((item) => itemQuantity(item) > 0).length;
     const sourceCount = new Set(essentials.flatMap((item) => item.sourceListingIds || [])).size;
-    const image = essentials.find((item) => item.image)?.image || "";
-    const visual = image
-      ? `<img src="${escapeHtml(image)}" alt="Fear Of God Essentials" loading="lazy" />`
-      : `<div class="placeholder">FOG</div>`;
-    const familyStatus = stock > 0 ? "В продаже" : essentials.every((item) => item.status === "archived") ? "Архив" : "Подготовка";
-    return `<article class="product-card family-card" data-essentials-card><div class="product-image">${visual}<span class="status-badge">${familyStatus}</span></div><div class="product-content"><span class="product-brand">Fear Of God Essentials</span><h3>Весь ассортимент Essentials</h3><div class="family-stats"><div class="family-stat"><span>Остаток</span><strong>${stock} шт.</strong></div><div class="family-stat"><span>Вариантов в наличии</span><strong>${activeVariants} / ${essentials.length}</strong></div><div class="family-stat"><span>Источников Авито</span><strong>${sourceCount}</strong></div></div><button type="button" class="button button-primary family-open">Открыть ассортимент →</button></div></article>`;
+    return `<article class="product-card family-card" data-essentials-card><div class="product-content"><div class="family-heading"><span class="product-brand">Fear Of God Essentials</span><h3>Весь ассортимент Essentials</h3></div><div class="family-stats"><div class="family-stat"><span>Остаток</span><strong>${stock} шт.</strong></div><div class="family-stat"><span>Вариантов</span><strong>${activeVariants} / ${essentials.length}</strong></div><div class="family-stat"><span>Объявлений</span><strong>${sourceCount}</strong></div></div><button type="button" class="button button-primary family-open">Открыть ассортимент →</button></div></article>`;
   })() : "";
 
   const renderRegularCard = (item) => {
@@ -506,8 +501,8 @@ function renderEssentialsMatrix() {
     const stock = productVariants.reduce((sum, item) => sum + itemQuantity(item), 0);
     const colors = ESSENTIALS_COLORS.map((color) => {
       const colorVariants = productVariants.filter((item) => item.color === color.name);
-      const rows = colorVariants.map((item) => `<div class="variant-row" data-variant-row="${item.id}"><span class="variant-size">${escapeHtml(item.size)}</span><input type="number" min="0" name="quantity" value="${itemQuantity(item)}" aria-label="Количество ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="purchasePrice" value="${Number(item.purchasePrice || 0)}" aria-label="Закупка ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="listPrice" value="${Number(item.listPrice || 0)}" aria-label="Цена ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><select name="status" aria-label="Статус ${escapeHtml(item.name)} ${escapeHtml(item.size)}"><option value="draft" ${item.status === "draft" ? "selected" : ""}>Подготовка</option><option value="available" ${item.status === "available" ? "selected" : ""}>В продаже</option><option value="reserved" ${item.status === "reserved" ? "selected" : ""}>Бронь</option><option value="archived" ${item.status === "archived" ? "selected" : ""}>Архив</option></select><button class="variant-delete" type="button" data-delete-variant="${item.id}" title="Удалить вариант">×</button></div>`).join("");
-      return `<section class="color-group"><h4>${escapeHtml(color.name)}</h4><small>${escapeHtml(color.russian)}</small><div class="matrix-legend"><span>Размер</span><span>Штук</span><span>Закупка</span><span>Продажа</span><span>Статус</span></div>${rows || `<p class="muted">Вариантов нет</p>`}</section>`;
+      const rows = colorVariants.map((item) => `<div class="variant-row" data-variant-row="${item.id}"><span class="variant-size">${escapeHtml(item.size)}</span><input type="number" min="0" name="quantity" value="${itemQuantity(item)}" aria-label="Количество ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="purchasePrice" value="${Number(item.purchasePrice || 0)}" aria-label="Закупка ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><input type="number" min="0" name="listPrice" value="${Number(item.listPrice || 0)}" aria-label="Цена ${escapeHtml(item.name)} ${escapeHtml(item.size)}" /><button class="variant-delete" type="button" data-delete-variant="${item.id}" title="Удалить вариант">×</button></div>`).join("");
+      return `<section class="color-group"><h4>${escapeHtml(color.name)}</h4><small>${escapeHtml(color.russian)}</small><div class="matrix-legend"><span>Размер</span><span>Штук</span><span>Закупка</span><span>Продажа</span></div>${rows || `<p class="muted">Вариантов нет</p>`}</section>`;
     }).join("");
     return `<section class="essentials-product"><div class="essentials-product-heading"><h3>${escapeHtml(product.name)}</h3><span>${stock} шт. в остатке · ${product.sizes.join(" / ")}</span></div><div class="color-groups">${colors}</div></section>`;
   }).join("");
@@ -636,10 +631,7 @@ function saveEssentialsMatrix() {
     item.quantity = Math.max(0, Number(row.querySelector('[name="quantity"]').value || 0));
     item.purchasePrice = Number(row.querySelector('[name="purchasePrice"]').value || 0);
     item.listPrice = Number(row.querySelector('[name="listPrice"]').value || 0);
-    item.status = row.querySelector('[name="status"]').value;
-    if (item.quantity === 0 && item.status === "available") item.status = "draft";
-    if (item.quantity > 0 && item.status === "draft") item.status = "available";
-    if (item.status === "archived") item.quantity = 0;
+    item.status = item.quantity > 0 ? "available" : "draft";
   });
   saveState();
   renderAll();
