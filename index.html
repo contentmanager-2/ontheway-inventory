@@ -9,7 +9,7 @@
       content="OnTheWay — учёт брендовой одежды, продаж и финансов"
     />
     <title>OnTheWay — учёт вещей</title>
-    <link rel="stylesheet" href="styles.css?v=20260922-brand-order-1" />
+    <link rel="stylesheet" href="styles.css?v=20260922-safe-edit-1" />
   </head>
   <body>
     <section class="loading-screen" id="loading-screen" aria-live="polite">
@@ -187,7 +187,7 @@
     <dialog id="edit-item-dialog">
       <form method="dialog" id="edit-item-form" class="dialog-form">
         <input name="id" type="hidden" />
-        <div class="dialog-heading"><div><p class="eyebrow">Карточка товара</p><h2 id="edit-item-title">Редактировать вещь</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow">Карточка товара</p><h2 id="edit-item-title">Карточка вещи</h2></div><div class="dialog-heading-actions"><button class="button button-ghost" id="toggle-edit-mode" type="button">Редактировать</button><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div></div>
         <div class="form-grid">
           <label><span>Название *</span><input name="name" required /></label>
           <label><span>Бренд *</span><input name="brand" required /></label>
@@ -206,8 +206,8 @@
         </div>
         <section class="item-photo-gallery hidden" id="item-photo-gallery"></section>
         <div class="dialog-actions dialog-actions-split">
-          <div><button class="button button-danger" type="button" id="delete-item">Удалить навсегда</button><button class="button button-ghost" type="button" id="archive-item">В архив</button></div>
-          <div><button class="button button-ghost" value="cancel" formnovalidate>Отмена</button><button class="button button-primary" value="default" type="submit">Сохранить</button></div>
+          <div id="destructive-item-actions"><button class="button button-danger" type="button" id="delete-item">Удалить навсегда</button><button class="button button-ghost" type="button" id="archive-item">В архив</button></div>
+          <div><button class="button button-ghost" value="cancel" formnovalidate id="close-edit-item">Закрыть</button><button class="button button-primary" value="default" type="submit" id="save-item">Сохранить</button></div>
         </div>
       </form>
     </dialog>
@@ -272,6 +272,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status"></div>
-    <script type="module" src="app.js?v=20260922-brand-order-1"></script>
+    <script type="module" src="app.js?v=20260922-safe-edit-1"></script>
   </body>
 </html>

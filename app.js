@@ -491,14 +491,36 @@ function openItemDialog() {
   document.querySelector("#item-dialog").showModal();
 }
 
+const ITEM_FORM_FIELDS = ["id", "name", "brand", "category", "status", "color", "size", "quantity", "purchasePrice", "listPrice", "measurements", "image", "photoFolderUrl", "avitoUrl", "notes"];
+let activeItemId = "";
+
+function fillEditItemForm(item) {
+  const form = document.querySelector("#edit-item-form");
+  form.reset();
+  ITEM_FORM_FIELDS.forEach((field) => {
+    form.elements[field].value = item[field] ?? "";
+  });
+}
+
+function setItemDialogMode(editing) {
+  const form = document.querySelector("#edit-item-form");
+  form.classList.toggle("view-mode", !editing);
+  form.querySelectorAll("input, select, textarea").forEach((control) => {
+    if (control.name !== "id") control.disabled = !editing;
+  });
+  document.querySelector("#toggle-edit-mode").textContent = editing ? "Отменить редактирование" : "Редактировать";
+  document.querySelector("#destructive-item-actions").classList.toggle("hidden", !editing);
+  document.querySelector("#save-item").classList.toggle("hidden", !editing);
+  document.querySelector("#save-item").disabled = !editing;
+  document.querySelector("#close-edit-item").textContent = editing ? "Отмена" : "Закрыть";
+}
+
 function openEditItemDialog(itemId) {
   const item = getItem(itemId);
   if (!item) return;
-  const form = document.querySelector("#edit-item-form");
-  form.reset();
-  ["id", "name", "brand", "category", "status", "color", "size", "quantity", "purchasePrice", "listPrice", "measurements", "image", "photoFolderUrl", "avitoUrl", "notes"].forEach((field) => {
-    form.elements[field].value = item[field] ?? "";
-  });
+  activeItemId = itemId;
+  fillEditItemForm(item);
+  setItemDialogMode(false);
   document.querySelector("#edit-item-title").textContent = `${item.sku} · ${item.name}`;
   document.querySelector("#edit-item-dialog").showModal();
   renderYandexGallery(item);
@@ -685,7 +707,8 @@ function deleteEditedItem() {
     showToast("У вещи есть продажи — её можно только архивировать");
     return;
   }
-  if (!window.confirm(`Удалить ${item.sku} окончательно? Это действие нельзя отменить.`)) return;
+  if (!window.confirm(`Удалить ${item.sku} навсегда?`)) return;
+  if (!window.confirm(`Вы точно хотите окончательно удалить ${item.sku}? Это действие нельзя отменить.`)) return;
   if (item.catalogKey) state.deletedCatalogKeys.push(item.catalogKey);
   state.items = state.items.filter((entry) => entry.id !== item.id);
   state.expenses = state.expenses.map((expense) => expense.itemId === item.id ? { ...expense, itemId: "" } : expense);
@@ -1067,6 +1090,18 @@ document.querySelector("#edit-item-form").addEventListener("submit", (event) => 
   event.preventDefault();
   if (event.submitter?.value === "cancel") return document.querySelector("#edit-item-dialog").close();
   saveEditedItem(event.currentTarget);
+});
+document.querySelector("#toggle-edit-mode").addEventListener("click", () => {
+  const form = document.querySelector("#edit-item-form");
+  const editing = form.classList.contains("view-mode");
+  if (!editing) {
+    const item = getItem(activeItemId);
+    if (item) {
+      fillEditItemForm(item);
+      renderYandexGallery(item);
+    }
+  }
+  setItemDialogMode(editing);
 });
 document.querySelector("#archive-item").addEventListener("click", archiveEditedItem);
 document.querySelector("#delete-item").addEventListener("click", deleteEditedItem);
