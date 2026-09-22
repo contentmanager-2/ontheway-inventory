@@ -433,7 +433,7 @@ function renderInventory() {
     ? Map.groupBy(regular, (item) => item.brand || "Без бренда")
     : regular.reduce((groups, item) => groups.set(item.brand || "Без бренда", [...(groups.get(item.brand || "Без бренда") || []), item]), new Map());
   const regularHtml = [...brandGroups.entries()]
-    .sort(([brandA], [brandB]) => brandA.localeCompare(brandB, "ru"))
+    .sort(([brandA, itemsA], [brandB, itemsB]) => itemsB.length - itemsA.length || brandA.localeCompare(brandB, "ru"))
     .map(([brand, items]) => `<details class="brand-folder" ${query ? "open" : ""}><summary><span>${escapeHtml(brand)}</span><small>${items.length} карточек · ${items.reduce((sum, item) => sum + itemQuantity(item), 0)} шт.</small></summary><div class="brand-product-grid">${items.map(renderRegularCard).join("")}</div></details>`)
     .join("");
   const essentialsFolder = familyHtml
